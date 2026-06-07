@@ -31,7 +31,17 @@ isdefined(@__MODULE__, :family_enabled) || include("_filter.jl")
 # Canonical run order. Matches PathFilter.ALL_FAMILIES so the CI's check_run
 # list shows up in the same sequence regardless of how families were passed
 # in via JIMM_TEST_FAMILIES.
-const _DRIVER_ORDER = ("infra", "bit", "resnet", "convnext", "convnextv2")
+const _DRIVER_ORDER = (
+    "infra",
+    "bit",
+    "resnet",
+    "convnext",
+    "convnextv2",
+    "vgg",
+    "seresnet",
+    "vit",
+    "coatnet",
+)
 
 function _scaffold_testset()
     @testset "Luximm scaffold" begin
@@ -65,6 +75,29 @@ function _scaffold_testset()
         @test isdefined(Luximm.Models, :convnext_mapping)
         @test isdefined(Luximm.Models, :_load_convnext)
         @test isdefined(Luximm.Models, :CONVNEXT_VARIANTS)
+        @test isdefined(Luximm.Models, :vgg)
+        @test isdefined(Luximm.Models, :vgg_mapping)
+        @test isdefined(Luximm.Models, :_load_vgg)
+        @test isdefined(Luximm.Models, :VGG_VARIANTS)
+        @test isdefined(Luximm.Models, :seresnet)
+        @test isdefined(Luximm.Models, :seresnet_mapping)
+        @test isdefined(Luximm.Models, :seresnet_state_mapping)
+        @test isdefined(Luximm.Models, :_load_seresnet)
+        @test isdefined(Luximm.Models, :SERESNET_VARIANTS)
+        @test isdefined(Luximm.Layers, :se_block)
+        @test isdefined(Luximm.Models, :vit)
+        @test isdefined(Luximm.Models, :vit_mapping)
+        @test isdefined(Luximm.Models, :_load_vit)
+        @test isdefined(Luximm.Models, :VIT_VARIANTS)
+        @test isdefined(Luximm.Layers, :patch_embed)
+        @test isdefined(Luximm.Layers, :mhsa)
+        @test isdefined(Luximm.Layers, :vit_block)
+        @test isdefined(Luximm.Models, :coatnet)
+        @test isdefined(Luximm.Models, :coatnet_mapping)
+        @test isdefined(Luximm.Models, :coatnet_state_mapping)
+        @test isdefined(Luximm.Models, :_load_coatnet)
+        @test isdefined(Luximm.Models, :COATNET_VARIANTS)
+        @test isdefined(Luximm.Layers, :rel_pos_attention)
         @test isdefined(Luximm.Models, :create_model)
         @test isdefined(Luximm.Models, :create_pretrained)
         @test isdefined(Luximm.Models, :default_num_classes)
@@ -86,6 +119,14 @@ function _dispatch_family(name::AbstractString)
         include(joinpath(@__DIR__, "test_convnext.jl"))
     elseif name == "convnextv2"
         include(joinpath(@__DIR__, "test_convnextv2.jl"))
+    elseif name == "vgg"
+        include(joinpath(@__DIR__, "test_vgg.jl"))
+    elseif name == "seresnet"
+        include(joinpath(@__DIR__, "test_seresnet.jl"))
+    elseif name == "vit"
+        include(joinpath(@__DIR__, "test_vit.jl"))
+    elseif name == "coatnet"
+        include(joinpath(@__DIR__, "test_coatnet.jl"))
     else
         error("unknown family in JIMM_TEST_FAMILIES: $(name)")
     end

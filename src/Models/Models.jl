@@ -10,6 +10,7 @@ using ..Interop:
     hf_hub_cache_dir,
     load_safetensors_state_dict,
     as_channel4d,
+    as_token_norm,
     adapt_input_conv
 
 # Shared ConvNeXt v1/v2 building blocks must be included before either
@@ -19,8 +20,12 @@ include("ConvNeXtCommon/Common.jl")
 
 include("ResNetV2/Model.jl")
 include("ResNet/Model.jl")
+include("SEResNet/Model.jl")
 include("ConvNeXtV2/Model.jl")
 include("ConvNeXt/Model.jl")
+include("VGG/Model.jl")
+include("ViT/Model.jl")
+include("CoAtNet/Model.jl")
 
 """
     create_model(variant; kwargs...) -> model
@@ -51,11 +56,19 @@ function create_model(variant::Symbol; kwargs...)
         return convnext(variant; kwargs...)
     elseif haskey(CONVNEXTV2_VARIANTS, variant)
         return convnextv2(variant; kwargs...)
+    elseif haskey(VGG_VARIANTS, variant)
+        return vgg(variant; kwargs...)
+    elseif haskey(SERESNET_VARIANTS, variant)
+        return seresnet(variant; kwargs...)
+    elseif haskey(VIT_VARIANTS, variant)
+        return vit(variant; kwargs...)
+    elseif haskey(COATNET_VARIANTS, variant)
+        return coatnet(variant; kwargs...)
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
             "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS.",
+            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end
@@ -76,11 +89,19 @@ function default_num_classes(variant::Symbol)
         return CONVNEXT_VARIANTS[variant].default_num_classes
     elseif haskey(CONVNEXTV2_VARIANTS, variant)
         return CONVNEXTV2_VARIANTS[variant].default_num_classes
+    elseif haskey(VGG_VARIANTS, variant)
+        return VGG_VARIANTS[variant].default_num_classes
+    elseif haskey(SERESNET_VARIANTS, variant)
+        return SERESNET_VARIANTS[variant].default_num_classes
+    elseif haskey(VIT_VARIANTS, variant)
+        return VIT_VARIANTS[variant].default_num_classes
+    elseif haskey(COATNET_VARIANTS, variant)
+        return COATNET_VARIANTS[variant].default_num_classes
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
             "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS.",
+            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end
@@ -207,11 +228,55 @@ function _load_pretrained(
             cache_dir = cache_dir,
             prefix = prefix,
         )
+    elseif haskey(VGG_VARIANTS, variant)
+        return _load_vgg(
+            ps,
+            st,
+            variant;
+            in_chans = in_chans,
+            num_classes = num_classes,
+            revision = revision,
+            cache_dir = cache_dir,
+            prefix = prefix,
+        )
+    elseif haskey(SERESNET_VARIANTS, variant)
+        return _load_seresnet(
+            ps,
+            st,
+            variant;
+            in_chans = in_chans,
+            num_classes = num_classes,
+            revision = revision,
+            cache_dir = cache_dir,
+            prefix = prefix,
+        )
+    elseif haskey(VIT_VARIANTS, variant)
+        return _load_vit(
+            ps,
+            st,
+            variant;
+            in_chans = in_chans,
+            num_classes = num_classes,
+            revision = revision,
+            cache_dir = cache_dir,
+            prefix = prefix,
+        )
+    elseif haskey(COATNET_VARIANTS, variant)
+        return _load_coatnet(
+            ps,
+            st,
+            variant;
+            in_chans = in_chans,
+            num_classes = num_classes,
+            revision = revision,
+            cache_dir = cache_dir,
+            prefix = prefix,
+        )
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
             "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS.",
+            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end
@@ -224,6 +289,14 @@ export BiTVariant,
     CONVNEXTV2_VARIANTS,
     ConvNeXtVariant,
     CONVNEXT_VARIANTS,
+    VGGVariant,
+    VGG_VARIANTS,
+    SEResNetVariant,
+    SERESNET_VARIANTS,
+    ViTVariant,
+    VIT_VARIANTS,
+    CoAtNetVariant,
+    COATNET_VARIANTS,
     create_model,
     create_pretrained,
     default_num_classes

@@ -22,6 +22,10 @@ const _FAMILY_PREFIXES = Dict{String,Tuple{Vararg{String}}}(
     "resnet" => ("src/Models/ResNet/",),
     "convnext" => ("src/Models/ConvNeXt/",),
     "convnextv2" => ("src/Models/ConvNeXtV2/",),
+    "vgg" => ("src/Models/VGG/",),
+    "seresnet" => ("src/Models/SEResNet/",),
+    "vit" => ("src/Models/ViT/",),
+    "coatnet" => ("src/Models/CoAtNet/",),
     "infra" => (),
 )
 
@@ -30,6 +34,10 @@ const _FAMILY_EXACT = Dict{String,Set{String}}(
     "resnet" => Set(["test/test_resnet.jl"]),
     "convnext" => Set(["test/test_convnext.jl"]),
     "convnextv2" => Set(["test/test_convnextv2.jl"]),
+    "vgg" => Set(["test/test_vgg.jl"]),
+    "seresnet" => Set(["test/test_seresnet.jl"]),
+    "vit" => Set(["test/test_vit.jl"]),
+    "coatnet" => Set(["test/test_coatnet.jl"]),
     "infra" => Set([
         "test/test_hf_download.jl",
         "test/test_hf_hub_download.jl",
@@ -37,7 +45,17 @@ const _FAMILY_EXACT = Dict{String,Set{String}}(
     ]),
 )
 
-const ALL_FAMILIES = ("infra", "bit", "resnet", "convnext", "convnextv2")
+const ALL_FAMILIES = (
+    "infra",
+    "bit",
+    "resnet",
+    "convnext",
+    "convnextv2",
+    "vgg",
+    "seresnet",
+    "vit",
+    "coatnet",
+)
 
 const REPRESENTATIVE_VARIANT = Dict{String,String}(
     "infra" => "",
@@ -45,6 +63,10 @@ const REPRESENTATIVE_VARIANT = Dict{String,String}(
     "resnet" => "resnet50_a1_in1k",
     "convnext" => "convnext_tiny_fb_in1k",
     "convnextv2" => "convnextv2_atto_fcmae_ft_in1k",
+    "vgg" => "vgg16_tv_in1k",
+    "seresnet" => "seresnet50_a1_in1k",
+    "vit" => "vit_base_patch16_224_augreg2_in21k_ft_in1k",
+    "coatnet" => "coatnet_0_rw_224_sw_in1k",
 )
 
 _is_shared(path::AbstractString) =

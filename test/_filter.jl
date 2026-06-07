@@ -27,7 +27,17 @@
 #   JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
 #       julia --project -e 'using Pkg; Pkg.test()'
 
-const _JIMM_DEFAULT_FAMILIES = ("infra", "bit", "resnet", "convnextv2", "convnext")
+const _JIMM_DEFAULT_FAMILIES = (
+    "infra",
+    "bit",
+    "resnet",
+    "convnextv2",
+    "convnext",
+    "vgg",
+    "seresnet",
+    "vit",
+    "coatnet",
+)
 
 function _jimm_env_csv(name::AbstractString)
     raw = get(ENV, name, "")
@@ -47,7 +57,11 @@ function _jimm_variant_family(v::Symbol)
     startswith(s, "convnextv2_") && return "convnextv2"
     startswith(s, "convnext_") && return "convnext"
     startswith(s, "resnetv2_") && occursin("_bit_", s) && return "bit"
+    startswith(s, "seresnet") && return "seresnet"
     startswith(s, "resnet") && return "resnet"
+    startswith(s, "vgg") && return "vgg"
+    startswith(s, "vit") && return "vit"
+    startswith(s, "coatnet") && return "coatnet"
     return ""
 end
 

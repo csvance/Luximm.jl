@@ -25,3 +25,5 @@ docs/site/
 # Editor
 .vscode/
 .idea/
+
+.claude

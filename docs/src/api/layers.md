@@ -15,6 +15,12 @@ layer library.
 std_conv
 layernorm2d
 grn_layer
+se_block
+patch_embed
+mhsa
+vit_block
+vit_layernorm
+rel_pos_attention
 ```
 
 ## Initializers
