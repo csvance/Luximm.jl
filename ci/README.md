@@ -442,9 +442,23 @@ all already `completed`. To force a re-test:
 
 The CI's family routing lives in `ci/JimmCI/src/PathFilter.jl`. When a
 new model family is added under `src/Models/<Family>/` with a matching
-`test/test_<family>.jl`, update `_FAMILY_PREFIXES`, `_FAMILY_EXACT`,
-`ALL_FAMILIES`, and `REPRESENTATIVE_VARIANT` in that file. The root
-`CLAUDE.md` repeats this checklist; keep both in sync.
+`test/test_<family>.jl` and a `test/parity/dump_<family>_io.py` sidecar,
+update **all** of these or the family will silently skip on CI (a
+`get(..., nothing)` lookup returns early, the parity testset finds no
+fixture, and the Check Run goes green without testing anything):
+
+1. `ci/JimmCI/src/PathFilter.jl` — `_FAMILY_PREFIXES`, `_FAMILY_EXACT`,
+   `ALL_FAMILIES`, `REPRESENTATIVE_VARIANT`.
+2. `ci/JimmCI/src/Builder.jl` — `_FAMILY_SIDECAR` (family → dump script);
+   without an entry `_ensure_fixtures!` dumps nothing.
+3. `scripts/test_variant.sh` — the `case "$variant"` family→sidecar block
+   (mirrors `test/_filter.jl::_jimm_variant_family`).
+4. `test/_ci_driver.jl` — `_DRIVER_ORDER` and `_dispatch_family` (and the
+   scaffold `isdefined` asserts).
+5. `test/_filter.jl` — `_JIMM_DEFAULT_FAMILIES` and `_jimm_variant_family`.
+
+The root `CLAUDE.md` repeats the source-side checklist (README table +
+PathFilter); keep all of these in sync.
 
 ## Security notes
 

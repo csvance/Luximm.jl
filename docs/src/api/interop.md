@@ -12,6 +12,21 @@ HuggingFace Hub, and loading `.safetensors` blobs.
 
 ```@docs
 apply_state_dict
+read_parity
+```
+
+## Weight-layout transforms
+
+Per-tensor transforms passed in `apply_state_dict` mappings to bridge
+PyTorch's stored layout and the Lux-natural layout (see
+[Porting Backbones](../porting.md)).
+
+```@docs
+axis_reverse
+pyperm
+as_channel4d
+as_token_norm
+adapt_input_conv
 ```
 
 ## HuggingFace Hub

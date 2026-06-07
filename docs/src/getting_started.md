@@ -65,11 +65,12 @@ A few things worth noting in the snippet:
 - `Lux.setup` produces a `ps` (parameters) and `st` (state)
   NamedTuple. The closure returns a new `(ps, st)` with the
   HuggingFace weights merged in. Stateless families (BiT, ConvNeXt,
-  ConvNeXtV2) return `st` unchanged; ResNet merges BatchNorm running
-  statistics into `st`. Call `Lux.testmode(st)` before inference so
-  BatchNorm uses those running statistics instead of the current
-  batch's statistics; for the stateless families it is a no-op but
-  still a safe default.
+  ConvNeXtV2, ViT, and the plain VGG variants) return `st` unchanged;
+  the BatchNorm families (ResNet, SE-ResNet, CoAtNet, and the `vgg*_bn`
+  variants) merge BatchNorm running statistics into `st`. Call
+  `Lux.testmode(st)` before inference so BatchNorm uses those running
+  statistics instead of the current batch's statistics; for the
+  stateless families it is a no-op but still a safe default.
 - The input is shaped `(W, H, C, N)`, Lux's convention. PyTorch's
   `(N, C, H, W)` is read-reversed at load time so most weights land
   in the layout Lux expects directly.

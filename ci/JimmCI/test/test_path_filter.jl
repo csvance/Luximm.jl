@@ -12,6 +12,10 @@ using JimmCI.PathFilter
         @test families_for_paths(["src/Models/ResNetV2/bit.jl"]) == ["bit"]
         @test families_for_paths(["src/Models/ConvNeXt/x.jl"]) == ["convnext"]
         @test families_for_paths(["src/Models/ConvNeXtV2/x.jl"]) == ["convnextv2"]
+        @test families_for_paths(["src/Models/VGG/x.jl"]) == ["vgg"]
+        @test families_for_paths(["src/Models/SEResNet/x.jl"]) == ["seresnet"]
+        @test families_for_paths(["src/Models/ViT/x.jl"]) == ["vit"]
+        @test families_for_paths(["src/Models/CoAtNet/x.jl"]) == ["coatnet"]
     end
 
     @testset "test-file exact matches" begin
@@ -19,6 +23,10 @@ using JimmCI.PathFilter
         @test families_for_paths(["test/test_bit_resnet.jl"]) == ["bit"]
         @test families_for_paths(["test/test_convnext.jl"]) == ["convnext"]
         @test families_for_paths(["test/test_convnextv2.jl"]) == ["convnextv2"]
+        @test families_for_paths(["test/test_vgg.jl"]) == ["vgg"]
+        @test families_for_paths(["test/test_seresnet.jl"]) == ["seresnet"]
+        @test families_for_paths(["test/test_vit.jl"]) == ["vit"]
+        @test families_for_paths(["test/test_coatnet.jl"]) == ["coatnet"]
         @test families_for_paths(["test/test_init.jl"]) == ["infra"]
     end
 

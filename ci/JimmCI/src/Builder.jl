@@ -18,6 +18,10 @@ const _FAMILY_SIDECAR = Dict{String,String}(
     "resnet" => "test/parity/dump_resnet_io.py",
     "convnext" => "test/parity/dump_convnext_io.py",
     "convnextv2" => "test/parity/dump_convnextv2_io.py",
+    "vgg" => "test/parity/dump_vgg_io.py",
+    "seresnet" => "test/parity/dump_seresnet_io.py",
+    "vit" => "test/parity/dump_vit_io.py",
+    "coatnet" => "test/parity/dump_coatnet_io.py",
 )
 
 struct Builder
@@ -312,6 +316,9 @@ function _env_for_run(cfg::Config, families::Vector{String}, variants::Dict{Stri
         env["JIMM_TEST_VARIANTS"] = join(var_list, ",")
     end
     env["JIMM_PARITY_DIR"] = cfg.parity_dir
+    # CoAtNet *_in12k repos use HF Xet storage, whose chunked transport can
+    # stall on some networks; force the classic blob download path.
+    env["HF_HUB_DISABLE_XET"] = "1"
     if cfg.hf_token !== nothing
         env["HF_TOKEN"] = cfg.hf_token
         env["HUGGING_FACE_HUB_TOKEN"] = cfg.hf_token
@@ -324,6 +331,8 @@ function _env_for_sidecar(cfg::Config)
     env["UV_PROJECT_ENVIRONMENT"] = cfg.python_env
     env["HF_HUB_CACHE"] = cfg.hf_cache
     env["JIMM_PARITY_DIR"] = cfg.parity_dir
+    # See _env_for_run: avoid the HF Xet stall on in12k checkpoint downloads.
+    env["HF_HUB_DISABLE_XET"] = "1"
     if cfg.hf_token !== nothing
         env["HF_TOKEN"] = cfg.hf_token
         env["HUGGING_FACE_HUB_TOKEN"] = cfg.hf_token

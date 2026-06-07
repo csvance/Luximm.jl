@@ -15,7 +15,7 @@
 LayerNorm over the channel axis (axis 1) of a `(dim, T, N)` token tensor, with
 per-channel affine. Matches timm's ViT `nn.LayerNorm(dim, eps=1e-6)`. The
 affine `:scale` / `:bias` leaves have shape `(dim, 1, 1)`, so the PyTorch
-`(dim,)` parameter is reshaped with [`as_token_norm`](@ref) when loading.
+`(dim,)` parameter is reshaped with `Luximm.Interop.as_token_norm` when loading.
 """
 vit_layernorm(dim::Int; eps::Float32 = 1.0f-6) =
     Lux.LayerNorm((dim, 1); dims = 1, epsilon = eps)

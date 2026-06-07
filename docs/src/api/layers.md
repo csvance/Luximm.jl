@@ -23,6 +23,13 @@ vit_layernorm
 rel_pos_attention
 ```
 
+## Helpers
+
+```@docs
+se_make_divisible
+rel_pos_index
+```
+
 ## Initializers
 
 ```@docs
