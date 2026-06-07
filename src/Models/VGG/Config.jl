@@ -3,7 +3,7 @@
 # Covers the eight torchvision-trained checkpoints timm re-hosts: the four
 # classic depths (11/13/16/19) from Simonyan & Zisserman 2014, each in a
 # plain and a BatchNorm (`_bn`) flavor. All ship a 1000-class ImageNet head
-# at 224x224, under torchvision's BSD-3-Clause license.
+# at 224x224, under the CC BY 4.0 license.
 #
 # The architecture is a stack of 3x3 (pad 1) convolutions and 2x2 stride-2
 # max-pools described by the classic VGG "configuration" letters:
