@@ -137,6 +137,15 @@ for its `:scale` / `:bias` leaves on WHCN 4D inputs.
 as_channel4d(a::AbstractArray) = reshape(Float32.(a), 1, 1, :, 1)
 
 """
+    as_token_norm(a) -> Array
+
+Reshape a `(C,)` PyTorch norm parameter into `(C, 1, 1)`, the shape used by a
+channel-axis LayerNorm over a `(C, T, N)` token tensor (see
+`Luximm.Layers.vit_layernorm`) for its `:scale` / `:bias` leaves.
+"""
+as_token_norm(a::AbstractArray) = reshape(Float32.(a), :, 1, 1)
+
+"""
     adapt_input_conv(in_chans) -> transform
 
 Build a state-dict transform that adapts a stem conv weight to the requested

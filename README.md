@@ -29,10 +29,14 @@ input shapes). File issues and PRs.
 | Family                      | Variant prefix                       | Weights | Weight License                     | Commercial Use |
 |-----------------------------|--------------------------------------|---------|------------------------------------|----------------|
 | [ResNet][resnet]            | [`:resnet*`][prefix-resnet]          | 5       | [Apache 2.0][license-apache2]      | ✅              |
+| [SE-ResNet][seresnet]       | [`:seresnet*`][prefix-seresnet]      | 1       | [Apache 2.0][license-apache2]      | ✅              |
 | [BiT ResNetV2][bit]         | [`:resnetv2_*_bit_*`][prefix-bit]    | 15      | [Apache 2.0][license-apache2]      | ✅              |
 | [ConvNeXt][convnextv1]      | [`:convnext_*`][prefix-convnext]     | 19      | [Apache 2.0][license-apache2]      | ✅              |
 | [ConvNeXt (DINOv3)][dinov3] | [`:convnext_*`][prefix-convnext]     | 4       | [DINOv3 License][license-dinov3]   | ⚠️             |
 | [ConvNeXt V2][convnextv2]   | [`:convnextv2_*`][prefix-convnextv2] | 26      | [CC BY-NC 4.0][license-convnextv2] | ❌              |
+| [VGG][vgg]                  | [`:vgg*`][prefix-vgg]                | 8       | [BSD-3-Clause][license-bsd3]       | ✅              |
+| [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 1       | [Apache 2.0][license-apache2]      | ✅              |
+| [CoAtNet][coatnet]          | [`:coatnet_*`][prefix-coatnet]       | 5       | [Apache 2.0][license-apache2]      | ✅              |
 
 ## Basic usage
 
@@ -122,11 +126,19 @@ me to work on and open-source the project.
 
 [prefix-resnet]: https://csvance.github.io/Luximm.jl/dev/api/models/#ResNet
 
+[prefix-seresnet]: https://csvance.github.io/Luximm.jl/dev/api/models/#SE-ResNet
+
 [prefix-bit]: https://csvance.github.io/Luximm.jl/dev/api/models/#BiT-ResNetV2
 
 [prefix-convnext]: https://csvance.github.io/Luximm.jl/dev/api/models/#ConvNeXt
 
 [prefix-convnextv2]: https://csvance.github.io/Luximm.jl/dev/api/models/#ConvNeXt-V2
+
+[prefix-vgg]: https://csvance.github.io/Luximm.jl/dev/api/models/#VGG
+
+[prefix-vit]: https://csvance.github.io/Luximm.jl/dev/api/models/#ViT
+
+[prefix-coatnet]: https://csvance.github.io/Luximm.jl/dev/api/models/#CoAtNet
 
 [medicalmetrics]: https://medicalmetrics.com/
 
@@ -135,6 +147,8 @@ me to work on and open-source the project.
 [license-dinov3]: https://github.com/facebookresearch/dinov3/blob/main/LICENSE.md
 
 [license-convnextv2]: https://github.com/facebookresearch/ConvNeXt-V2/blob/main/LICENSE
+
+[license-bsd3]: https://github.com/pytorch/vision/blob/main/LICENSE
 
 [bit]: https://arxiv.org/abs/1912.11370
 
@@ -145,3 +159,11 @@ me to work on and open-source the project.
 [convnextv2]: https://arxiv.org/abs/2301.00808
 
 [resnet]: https://arxiv.org/abs/1512.03385
+
+[seresnet]: https://arxiv.org/abs/1709.01507
+
+[vgg]: https://arxiv.org/abs/1409.1556
+
+[vit]: https://arxiv.org/abs/2010.11929
+
+[coatnet]: https://arxiv.org/abs/2106.04803

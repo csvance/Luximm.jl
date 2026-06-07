@@ -60,6 +60,27 @@ end
 Markdown.parse(String(take!(io)))
 ```
 
+## SE-ResNet
+
+```@docs
+SEResNetVariant
+SERESNET_VARIANTS
+```
+
+### Registered variants
+
+```@eval
+using Markdown, Luximm
+rows = sort(collect(Luximm.SERESNET_VARIANTS); by = p -> String(first(p)))
+io = IOBuffer()
+println(io, "| Variant | num_classes | num_features | input size |")
+println(io, "|:---|---:|---:|---:|")
+for (k, v) in rows
+    println(io, "| [`:$(k)`](https://huggingface.co/$(v.hf_repo)) | $(v.default_num_classes) | $(v.num_features) | $(v.default_input_size) |")
+end
+Markdown.parse(String(take!(io)))
+```
+
 ## BiT ResNetV2
 
 ```@docs
@@ -134,6 +155,69 @@ CONVNEXTV2_VARIANTS
 ```@eval
 using Markdown, Luximm
 rows = sort(collect(Luximm.CONVNEXTV2_VARIANTS); by = p -> String(first(p)))
+io = IOBuffer()
+println(io, "| Variant | num_classes | num_features | input size |")
+println(io, "|:---|---:|---:|---:|")
+for (k, v) in rows
+    println(io, "| [`:$(k)`](https://huggingface.co/$(v.hf_repo)) | $(v.default_num_classes) | $(v.dims[end]) | $(v.default_input_size) |")
+end
+Markdown.parse(String(take!(io)))
+```
+
+## VGG
+
+```@docs
+VGGVariant
+VGG_VARIANTS
+```
+
+### Registered variants
+
+```@eval
+using Markdown, Luximm
+rows = sort(collect(Luximm.VGG_VARIANTS); by = p -> String(first(p)))
+io = IOBuffer()
+println(io, "| Variant | num_classes | num_features | input size |")
+println(io, "|:---|---:|---:|---:|")
+for (k, v) in rows
+    println(io, "| [`:$(k)`](https://huggingface.co/$(v.hf_repo)) | $(v.default_num_classes) | 512 | $(v.default_input_size) |")
+end
+Markdown.parse(String(take!(io)))
+```
+
+## ViT
+
+```@docs
+ViTVariant
+VIT_VARIANTS
+```
+
+### Registered variants
+
+```@eval
+using Markdown, Luximm
+rows = sort(collect(Luximm.VIT_VARIANTS); by = p -> String(first(p)))
+io = IOBuffer()
+println(io, "| Variant | num_classes | num_features | input size |")
+println(io, "|:---|---:|---:|---:|")
+for (k, v) in rows
+    println(io, "| [`:$(k)`](https://huggingface.co/$(v.hf_repo)) | $(v.default_num_classes) | $(v.embed_dim) | $(v.default_input_size) |")
+end
+Markdown.parse(String(take!(io)))
+```
+
+## CoAtNet
+
+```@docs
+CoAtNetVariant
+COATNET_VARIANTS
+```
+
+### Registered variants
+
+```@eval
+using Markdown, Luximm
+rows = sort(collect(Luximm.COATNET_VARIANTS); by = p -> String(first(p)))
 io = IOBuffer()
 println(io, "| Variant | num_classes | num_features | input size |")
 println(io, "|:---|---:|---:|---:|")

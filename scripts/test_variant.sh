@@ -81,12 +81,24 @@ case "$variant" in
     resnetv2_*_bit_*)
         sidecar="test/parity/dump_resnetv2_bit_io.py"
         ;;
+    seresnet*)
+        sidecar="test/parity/dump_seresnet_io.py"
+        ;;
     resnet*)
         sidecar="test/parity/dump_resnet_io.py"
         ;;
+    vgg*)
+        sidecar="test/parity/dump_vgg_io.py"
+        ;;
+    vit*)
+        sidecar="test/parity/dump_vit_io.py"
+        ;;
+    coatnet*)
+        sidecar="test/parity/dump_coatnet_io.py"
+        ;;
     *)
         echo "Could not resolve family for variant '$variant'." >&2
-        echo "Known prefixes: convnextv2_*, convnext_*, resnet*, resnetv2_*_bit_*." >&2
+        echo "Known prefixes: convnextv2_*, convnext_*, resnetv2_*_bit_*, seresnet*, resnet*, vgg*, vit*, coatnet*." >&2
         exit 2
         ;;
 esac
