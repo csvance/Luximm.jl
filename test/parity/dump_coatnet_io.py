@@ -28,6 +28,10 @@ from _dump_common import dump
 
 COATNET_VARIANTS_FULL: Mapping[str, str] = {
     "coatnet_0_rw_224_sw_in1k": "coatnet_0_rw_224.sw_in1k",
+    "coatnet_1_rw_224_sw_in1k": "coatnet_1_rw_224.sw_in1k",
+    "coatnet_2_rw_224_sw_in12k_ft_in1k": "coatnet_2_rw_224.sw_in12k_ft_in1k",
+    "coatnet_2_rw_224_sw_in12k": "coatnet_2_rw_224.sw_in12k",
+    "coatnet_3_rw_224_sw_in12k": "coatnet_3_rw_224.sw_in12k",
 }
 
 

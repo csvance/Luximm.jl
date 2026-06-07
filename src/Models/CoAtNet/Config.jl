@@ -24,6 +24,15 @@ Fields:
   `num_features`.
 - `stem_width`: the two stem conv widths `(s1, s2)`; `s2` feeds stage 1.
 - `block_types`: per-stage block kind, `:C` (MBConv) or `:T` (transformer).
+- `stride_mode`: how MBConv blocks downsample — `:pool` (avg-pool the main
+  path, stride-1 convs) or `:dw` (stride the depthwise conv, no pool).
+- `attn_early`: MBConv SE placement — `true` puts SE between the depthwise conv
+  and norm2 (timm `se_early`), `false` after norm2 (timm `se`).
+- `se_act`: MBConv SE bottleneck activation, `:relu` or `:silu`.
+- `transformer_shortcut_bias`: whether the transformer downsample shortcut's
+  1x1 expand conv carries a bias.
+- `layer_scale`: whether transformer blocks apply LayerScale (`ls1`/`ls2`
+  per-channel `gamma`) to the attention and MLP residual branches.
 - `img_size`: native input resolution (enforced; the transformer
   relative-position bias is sized to the per-stage feature map).
 - `hf_repo`: HuggingFace repo containing `model.safetensors`.
@@ -36,6 +45,11 @@ struct CoAtNetVariant
     dims::NTuple{4,Int}
     stem_width::NTuple{2,Int}
     block_types::NTuple{4,Symbol}
+    stride_mode::Symbol
+    attn_early::Bool
+    se_act::Symbol
+    transformer_shortcut_bias::Bool
+    layer_scale::Bool
     img_size::Int
     hf_repo::String
     default_num_classes::Int
@@ -67,15 +81,89 @@ Lookup table for the CoAtNet variants ported from timm. Keys are the timm model
 name with dots rewritten as underscores.
 """
 const COATNET_VARIANTS = Dict{Symbol,CoAtNetVariant}(
+    # coatnet_0: pool-stride MBConv, early SE (ReLU), bias-free transformer
+    # shortcut, no LayerScale.
     :coatnet_0_rw_224_sw_in1k => CoAtNetVariant(
         :coatnet_0_rw_224_sw_in1k,
         (2, 3, 7, 2),
         (96, 192, 384, 768),
         (32, 64),
         (:C, :C, :T, :T),
+        :pool,
+        true,
+        :relu,
+        false,
+        false,
         224,
         "timm/coatnet_0_rw_224.sw_in1k",
         1000,
+        224,
+    ),
+    # coatnet_1: depthwise-stride MBConv, otherwise like coatnet_0.
+    :coatnet_1_rw_224_sw_in1k => CoAtNetVariant(
+        :coatnet_1_rw_224_sw_in1k,
+        (2, 6, 14, 2),
+        (96, 192, 384, 768),
+        (32, 64),
+        (:C, :C, :T, :T),
+        :dw,
+        true,
+        :relu,
+        false,
+        false,
+        224,
+        "timm/coatnet_1_rw_224.sw_in1k",
+        1000,
+        224,
+    ),
+    # coatnet_2: depthwise stride, late SE (SiLU), transformer shortcut bias.
+    :coatnet_2_rw_224_sw_in12k_ft_in1k => CoAtNetVariant(
+        :coatnet_2_rw_224_sw_in12k_ft_in1k,
+        (2, 6, 14, 2),
+        (128, 256, 512, 1024),
+        (64, 128),
+        (:C, :C, :T, :T),
+        :dw,
+        false,
+        :silu,
+        true,
+        false,
+        224,
+        "timm/coatnet_2_rw_224.sw_in12k_ft_in1k",
+        1000,
+        224,
+    ),
+    :coatnet_2_rw_224_sw_in12k => CoAtNetVariant(
+        :coatnet_2_rw_224_sw_in12k,
+        (2, 6, 14, 2),
+        (128, 256, 512, 1024),
+        (64, 128),
+        (:C, :C, :T, :T),
+        :dw,
+        false,
+        :silu,
+        true,
+        false,
+        224,
+        "timm/coatnet_2_rw_224.sw_in12k",
+        11821,
+        224,
+    ),
+    # coatnet_3: like coatnet_2 plus LayerScale in the transformer blocks.
+    :coatnet_3_rw_224_sw_in12k => CoAtNetVariant(
+        :coatnet_3_rw_224_sw_in12k,
+        (2, 6, 14, 2),
+        (192, 384, 768, 1536),
+        (96, 192),
+        (:C, :C, :T, :T),
+        :dw,
+        false,
+        :silu,
+        true,
+        true,
+        224,
+        "timm/coatnet_3_rw_224.sw_in12k",
+        11821,
         224,
     ),
 )
