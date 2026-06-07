@@ -34,7 +34,7 @@ input shapes). File issues and PRs.
 | [ConvNeXt][convnextv1]      | [`:convnext_*`][prefix-convnext]     | 19      | [Apache 2.0][license-apache2]      | ✅              |
 | [ConvNeXt (DINOv3)][dinov3] | [`:convnext_*`][prefix-convnext]     | 4       | [DINOv3 License][license-dinov3]   | ⚠️             |
 | [ConvNeXt V2][convnextv2]   | [`:convnextv2_*`][prefix-convnextv2] | 26      | [CC BY-NC 4.0][license-convnextv2] | ❌              |
-| [VGG][vgg]                  | [`:vgg*`][prefix-vgg]                | 8       | [BSD-3-Clause][license-bsd3]       | ✅              |
+| [VGG][vgg]                  | [`:vgg*`][prefix-vgg]                | 8       | [CC BY 4.0][license-ccby4]         | ✅              |
 | [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 1       | [Apache 2.0][license-apache2]      | ✅              |
 | [CoAtNet][coatnet]          | [`:coatnet_*`][prefix-coatnet]       | 5       | [Apache 2.0][license-apache2]      | ✅              |
 
@@ -148,7 +148,7 @@ me to work on and open-source the project.
 
 [license-convnextv2]: https://github.com/facebookresearch/ConvNeXt-V2/blob/main/LICENSE
 
-[license-bsd3]: https://github.com/pytorch/vision/blob/main/LICENSE
+[license-ccby4]: https://creativecommons.org/licenses/by/4.0/
 
 [bit]: https://arxiv.org/abs/1912.11370
 
