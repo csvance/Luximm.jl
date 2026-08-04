@@ -1,6 +1,6 @@
 <p align="center">
     <img width="300px" src="docs/src/assets/logo.svg"/>
-</p>
+</p> 
 <div align="center">
 
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://csvance.github.io/Luximm.jl/dev/)
