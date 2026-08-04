@@ -115,6 +115,57 @@ mapping function for the family then routes each state-dict key
 into the corresponding Lux parameter path via
 [`apply_state_dict`](@ref).
 
+### The `features_only` fixture
+
+Variants in a family with a feature pyramid (ResNet, SE-ResNet, BiT
+ResNetV2, ConvNeXt, ConvNeXt V2) have a **second** fixture,
+`<variant_key>_featsonly_io.h5`, produced by a single shared sidecar
+rather than a per-family one. It holds timm's `features_only=True`
+outputs, one dataset per tap, plus timm's own tap table:
+
+- `/output/feat_01` ... `/output/feat_0K`: one per feature map, ordered
+  by increasing reduction.
+- `/feature_channels`, `/feature_reductions`: timm's
+  `feature_info.channels()` and `feature_info.reduction()`. These pin
+  Luximm's [`feature_info`](@ref) table to timm's, so a tap list that
+  drifts (a wrong channel count, a missed reduction-2 stem tap) fails
+  the test even when every tensor still has a plausible shape.
+
+Dump one variant, one family, or everything:
+
+```
+# One variant
+uv run python test/parity/dump_features_only_io.py \
+    --variant resnet50.a1_in1k
+
+# One family. The five pyramid families are: resnet, seresnet, bit,
+# convnext, convnextv2.
+uv run python test/parity/dump_features_only_io.py --all --family bit
+
+# Every registered variant of all five families (70 fixtures)
+uv run python test/parity/dump_features_only_io.py --all
+```
+
+Existing fixtures are skipped, so `--all` is safe to re-run and resumes
+after an interruption; delete the `.h5` to force a re-dump. Like the
+other sidecars it honors `JIMM_PARITY_DIR`, so on the CI box:
+
+```
+JIMM_PARITY_DIR=/var/lib/jimm-ci/parity \
+    uv run python test/parity/dump_features_only_io.py --all
+```
+
+There is no `--in-chans` companion: the pyramid parity test only
+exercises the 3-channel path, since the `adapt_input_conv` stem is
+already covered by the `forward_features` fixtures.
+
+`jimm-ci` dumps these automatically (`Builder.jl` invokes the sidecar
+per family alongside the per-family one), and `scripts/test_variant.sh`
+dumps a variant's pyramid fixture along with its `forward_features` one.
+Both paths are gated on the fixture existing, so a missing one shows up
+as `skipping <variant> feature pyramid: fixture missing at ...` rather
+than a failure.
+
 ### Dumping a fixture
 
 ```

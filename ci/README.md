@@ -170,7 +170,9 @@ When the user picks a job, the builder:
 * dumps the family's timm parity fixture(s) into a persistent
   `<state>/parity/` directory (symlinked into the worktree's
   `data/parity/`) via `uv run python test/parity/dump_<family>_io.py …`
-  if the fixture is missing;
+  if the fixture is missing, plus, for the five families with a feature
+  pyramid, the `<variant>_featsonly_io.h5` fixtures via the shared
+  `test/parity/dump_features_only_io.py` sidecar;
 * runs `julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'`
   inside a detached `git worktree` with `JIMM_TEST_FAMILIES` /
   `JIMM_TEST_VARIANTS` set;
@@ -453,6 +455,13 @@ fixture, and the Check Run goes green without testing anything):
    without an entry `_ensure_fixtures!` dumps nothing.
 3. `scripts/test_variant.sh` — the `case "$variant"` family→sidecar block
    (mirrors `test/_filter.jl::_jimm_variant_family`).
+
+If the new family also builds a feature pyramid (`features_only = true`),
+it needs a second fixture per variant and three more edits, or every
+variant's pyramid testset skips on a missing `<variant>_featsonly_io.h5`:
+`FEATURES_ONLY_VARIANTS` in `test/parity/dump_features_only_io.py`,
+`_FEATSONLY_FAMILIES` in `Builder.jl`, and the `has_pyramid=1` marker in
+`scripts/test_variant.sh`.
 4. `test/_ci_driver.jl` — `_DRIVER_ORDER` and `_dispatch_family` (and the
    scaffold `isdefined` asserts).
 5. `test/_filter.jl` — `_JIMM_DEFAULT_FAMILIES` and `_jimm_variant_family`.

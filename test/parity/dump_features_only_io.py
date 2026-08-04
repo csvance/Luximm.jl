@@ -15,8 +15,12 @@ stem tap) fails the test even when every tensor still has a plausible shape.
 
 Usage:
     uv run python test/parity/dump_features_only_io.py --all
+    uv run python test/parity/dump_features_only_io.py --all --family resnet
     uv run python test/parity/dump_features_only_io.py \\
         --variant resnet18.a1_in1k
+
+Existing fixtures are skipped, so `--all` is safe to re-run; delete the
+`.h5` to force a re-dump. Honors `JIMM_PARITY_DIR` like the other sidecars.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Mapping
+from typing import Mapping, Tuple
 
 import h5py
 import timm
@@ -34,16 +38,87 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _dump_common import dump, to_numpy
 
 
-# Short key (the Luximm variant symbol) -> full timm name. Kept to one or two
-# variants per family: the pyramid taps are a property of the architecture,
-# not of the checkpoint, so a representative per family is enough.
-FEATURES_ONLY_VARIANTS: Mapping[str, str] = {
-    "resnet18_a1_in1k": "resnet18.a1_in1k",
-    "resnet50_a1_in1k": "resnet50.a1_in1k",
-    "seresnet50_a1_in1k": "seresnet50.a1_in1k",
-    "resnetv2_50x1_bit_goog_in21k": "resnetv2_50x1_bit.goog_in21k",
-    "convnext_tiny_fb_in1k": "convnext_tiny.fb_in1k",
-    "convnextv2_atto_fcmae": "convnextv2_atto.fcmae",
+# Short key (the Luximm variant symbol) -> (full timm name, Luximm test
+# family). Covers every registered variant of the five families that build a
+# feature pyramid, so a full CI sweep produces a fixture for each one and no
+# variant silently skips its pyramid testset. VGG / ViT / CoAtNet are absent
+# on purpose: they have no pyramid.
+FEATURES_ONLY_VARIANTS: Mapping[str, Tuple[str, str]] = {
+    # resnet (5)
+    "resnet101_a1_in1k": ("resnet101.a1_in1k", "resnet"),
+    "resnet152_a1_in1k": ("resnet152.a1_in1k", "resnet"),
+    "resnet18_a1_in1k": ("resnet18.a1_in1k", "resnet"),
+    "resnet34_a1_in1k": ("resnet34.a1_in1k", "resnet"),
+    "resnet50_a1_in1k": ("resnet50.a1_in1k", "resnet"),
+    # seresnet (1)
+    "seresnet50_a1_in1k": ("seresnet50.a1_in1k", "seresnet"),
+    # bit (15)
+    "resnetv2_101x1_bit_goog_in21k": ("resnetv2_101x1_bit.goog_in21k", "bit"),
+    "resnetv2_101x1_bit_goog_in21k_ft_in1k": ("resnetv2_101x1_bit.goog_in21k_ft_in1k", "bit"),
+    "resnetv2_101x3_bit_goog_in21k": ("resnetv2_101x3_bit.goog_in21k", "bit"),
+    "resnetv2_101x3_bit_goog_in21k_ft_in1k": ("resnetv2_101x3_bit.goog_in21k_ft_in1k", "bit"),
+    "resnetv2_152x2_bit_goog_in21k": ("resnetv2_152x2_bit.goog_in21k", "bit"),
+    "resnetv2_152x2_bit_goog_in21k_ft_in1k": ("resnetv2_152x2_bit.goog_in21k_ft_in1k", "bit"),
+    "resnetv2_152x2_bit_goog_teacher_in21k_ft_in1k": ("resnetv2_152x2_bit.goog_teacher_in21k_ft_in1k", "bit"),
+    "resnetv2_152x2_bit_goog_teacher_in21k_ft_in1k_384": ("resnetv2_152x2_bit.goog_teacher_in21k_ft_in1k_384", "bit"),
+    "resnetv2_152x4_bit_goog_in21k": ("resnetv2_152x4_bit.goog_in21k", "bit"),
+    "resnetv2_152x4_bit_goog_in21k_ft_in1k": ("resnetv2_152x4_bit.goog_in21k_ft_in1k", "bit"),
+    "resnetv2_50x1_bit_goog_distilled_in1k": ("resnetv2_50x1_bit.goog_distilled_in1k", "bit"),
+    "resnetv2_50x1_bit_goog_in21k": ("resnetv2_50x1_bit.goog_in21k", "bit"),
+    "resnetv2_50x1_bit_goog_in21k_ft_in1k": ("resnetv2_50x1_bit.goog_in21k_ft_in1k", "bit"),
+    "resnetv2_50x3_bit_goog_in21k": ("resnetv2_50x3_bit.goog_in21k", "bit"),
+    "resnetv2_50x3_bit_goog_in21k_ft_in1k": ("resnetv2_50x3_bit.goog_in21k_ft_in1k", "bit"),
+    # convnext (23)
+    "convnext_base_dinov3_lvd1689m": ("convnext_base.dinov3_lvd1689m", "convnext"),
+    "convnext_base_fb_in1k": ("convnext_base.fb_in1k", "convnext"),
+    "convnext_base_fb_in22k": ("convnext_base.fb_in22k", "convnext"),
+    "convnext_base_fb_in22k_ft_in1k": ("convnext_base.fb_in22k_ft_in1k", "convnext"),
+    "convnext_base_fb_in22k_ft_in1k_384": ("convnext_base.fb_in22k_ft_in1k_384", "convnext"),
+    "convnext_large_dinov3_lvd1689m": ("convnext_large.dinov3_lvd1689m", "convnext"),
+    "convnext_large_fb_in1k": ("convnext_large.fb_in1k", "convnext"),
+    "convnext_large_fb_in22k": ("convnext_large.fb_in22k", "convnext"),
+    "convnext_large_fb_in22k_ft_in1k": ("convnext_large.fb_in22k_ft_in1k", "convnext"),
+    "convnext_large_fb_in22k_ft_in1k_384": ("convnext_large.fb_in22k_ft_in1k_384", "convnext"),
+    "convnext_small_dinov3_lvd1689m": ("convnext_small.dinov3_lvd1689m", "convnext"),
+    "convnext_small_fb_in1k": ("convnext_small.fb_in1k", "convnext"),
+    "convnext_small_fb_in22k": ("convnext_small.fb_in22k", "convnext"),
+    "convnext_small_fb_in22k_ft_in1k": ("convnext_small.fb_in22k_ft_in1k", "convnext"),
+    "convnext_small_fb_in22k_ft_in1k_384": ("convnext_small.fb_in22k_ft_in1k_384", "convnext"),
+    "convnext_tiny_dinov3_lvd1689m": ("convnext_tiny.dinov3_lvd1689m", "convnext"),
+    "convnext_tiny_fb_in1k": ("convnext_tiny.fb_in1k", "convnext"),
+    "convnext_tiny_fb_in22k": ("convnext_tiny.fb_in22k", "convnext"),
+    "convnext_tiny_fb_in22k_ft_in1k": ("convnext_tiny.fb_in22k_ft_in1k", "convnext"),
+    "convnext_tiny_fb_in22k_ft_in1k_384": ("convnext_tiny.fb_in22k_ft_in1k_384", "convnext"),
+    "convnext_xlarge_fb_in22k": ("convnext_xlarge.fb_in22k", "convnext"),
+    "convnext_xlarge_fb_in22k_ft_in1k": ("convnext_xlarge.fb_in22k_ft_in1k", "convnext"),
+    "convnext_xlarge_fb_in22k_ft_in1k_384": ("convnext_xlarge.fb_in22k_ft_in1k_384", "convnext"),
+    # convnextv2 (26)
+    "convnextv2_atto_fcmae": ("convnextv2_atto.fcmae", "convnextv2"),
+    "convnextv2_atto_fcmae_ft_in1k": ("convnextv2_atto.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_base_fcmae": ("convnextv2_base.fcmae", "convnextv2"),
+    "convnextv2_base_fcmae_ft_in1k": ("convnextv2_base.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_base_fcmae_ft_in22k_in1k": ("convnextv2_base.fcmae_ft_in22k_in1k", "convnextv2"),
+    "convnextv2_base_fcmae_ft_in22k_in1k_384": ("convnextv2_base.fcmae_ft_in22k_in1k_384", "convnextv2"),
+    "convnextv2_femto_fcmae": ("convnextv2_femto.fcmae", "convnextv2"),
+    "convnextv2_femto_fcmae_ft_in1k": ("convnextv2_femto.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_huge_fcmae": ("convnextv2_huge.fcmae", "convnextv2"),
+    "convnextv2_huge_fcmae_ft_in1k": ("convnextv2_huge.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_huge_fcmae_ft_in22k_in1k_384": ("convnextv2_huge.fcmae_ft_in22k_in1k_384", "convnextv2"),
+    "convnextv2_huge_fcmae_ft_in22k_in1k_512": ("convnextv2_huge.fcmae_ft_in22k_in1k_512", "convnextv2"),
+    "convnextv2_large_fcmae": ("convnextv2_large.fcmae", "convnextv2"),
+    "convnextv2_large_fcmae_ft_in1k": ("convnextv2_large.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_large_fcmae_ft_in22k_in1k": ("convnextv2_large.fcmae_ft_in22k_in1k", "convnextv2"),
+    "convnextv2_large_fcmae_ft_in22k_in1k_384": ("convnextv2_large.fcmae_ft_in22k_in1k_384", "convnextv2"),
+    "convnextv2_nano_fcmae": ("convnextv2_nano.fcmae", "convnextv2"),
+    "convnextv2_nano_fcmae_ft_in1k": ("convnextv2_nano.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_nano_fcmae_ft_in22k_in1k": ("convnextv2_nano.fcmae_ft_in22k_in1k", "convnextv2"),
+    "convnextv2_nano_fcmae_ft_in22k_in1k_384": ("convnextv2_nano.fcmae_ft_in22k_in1k_384", "convnextv2"),
+    "convnextv2_pico_fcmae": ("convnextv2_pico.fcmae", "convnextv2"),
+    "convnextv2_pico_fcmae_ft_in1k": ("convnextv2_pico.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_tiny_fcmae": ("convnextv2_tiny.fcmae", "convnextv2"),
+    "convnextv2_tiny_fcmae_ft_in1k": ("convnextv2_tiny.fcmae_ft_in1k", "convnextv2"),
+    "convnextv2_tiny_fcmae_ft_in22k_in1k": ("convnextv2_tiny.fcmae_ft_in22k_in1k", "convnextv2"),
+    "convnextv2_tiny_fcmae_ft_in22k_in1k_384": ("convnextv2_tiny.fcmae_ft_in22k_in1k_384", "convnextv2"),
 }
 
 
@@ -99,19 +174,36 @@ def run_one(short_key: str, full_name: str, out_path: str, seed: int = 0) -> Non
         f.create_dataset("feature_reductions", data=reductions)
 
 
+PYRAMID_FAMILIES = ("resnet", "seresnet", "bit", "convnext", "convnextv2")
+
+# Families Luximm registers that have no feature pyramid. A `--variant` from
+# one of these exits 0 with a note instead of failing, so the CI builder can
+# call this sidecar for every family without special-casing.
+NO_PYRAMID_PREFIXES = ("vgg", "vit", "coatnet")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant",
-                        help="Full timm variant name, e.g. resnet18.a1_in1k")
+                        help="Variant key or full timm name, e.g. resnet18.a1_in1k")
     parser.add_argument("--out", help="Output HDF5 path")
     parser.add_argument("--all", action="store_true",
                         help="Dump every variant in FEATURES_ONLY_VARIANTS.")
+    parser.add_argument("--family", choices=PYRAMID_FAMILIES,
+                        help="With --all, restrict the sweep to one family.")
     parser.add_argument("--seed", type=int, default=0,
                         help="Seed for the random input tensor (default: 0).")
     args = parser.parse_args()
 
     if args.all:
-        for short, full in FEATURES_ONLY_VARIANTS.items():
+        selected = [
+            (short, full)
+            for short, (full, family) in FEATURES_ONLY_VARIANTS.items()
+            if args.family is None or family == args.family
+        ]
+        scope = args.family or "all families"
+        print(f"[features_only] sweeping {len(selected)} variant(s) for {scope}")
+        for short, full in selected:
             run_one(short, full, default_out_path(short), seed=args.seed)
         return
 
@@ -120,14 +212,22 @@ def main() -> None:
 
     arg = args.variant
     if arg in FEATURES_ONLY_VARIANTS:
-        short, full = arg, FEATURES_ONLY_VARIANTS[arg]
+        short, full = arg, FEATURES_ONLY_VARIANTS[arg][0]
     else:
-        short = next((k for k, v in FEATURES_ONLY_VARIANTS.items() if v == arg), None)
+        short = next(
+            (k for k, v in FEATURES_ONLY_VARIANTS.items() if v[0] == arg), None)
         if short is None:
+            # A variant of a family with no pyramid is a no-op, not an error:
+            # its Julia testset skips on the missing fixture by design.
+            key = arg.replace(".", "_")
+            if key.startswith(NO_PYRAMID_PREFIXES):
+                print(f"[{arg}] family has no feature pyramid; nothing to dump")
+                return
             parser.error(
                 f"unknown variant: {arg}. "
                 f"Known short keys: {sorted(FEATURES_ONLY_VARIANTS.keys())}; "
-                f"known full names: {sorted(FEATURES_ONLY_VARIANTS.values())}")
+                f"known full names: "
+                f"{sorted(v[0] for v in FEATURES_ONLY_VARIANTS.values())}")
         full = arg
     run_one(short, full, args.out or default_out_path(short), seed=args.seed)
 
