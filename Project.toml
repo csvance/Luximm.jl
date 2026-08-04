@@ -1,6 +1,6 @@
 name = "Luximm"
 uuid = "dd5ee4bc-caca-4b0e-b38f-82888d7e6786"
-version = "0.2.0"
+version = "0.2.0-rc1"
 authors = ["Carroll Vance <cs.vance@icloud.com>"]
 
 [deps]
