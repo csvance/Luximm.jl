@@ -26,6 +26,7 @@ struct Config
     python_env::String
 
     julia_binary::String
+    uv_binary::String
     hf_token::Union{String,Nothing}
 end
 
@@ -39,6 +40,26 @@ end
 
 function _read_file_stripped(path::AbstractString)
     return strip(read(path, String))
+end
+
+# Resolve the `uv` executable the same way `julia_binary` is resolved: an
+# absolute path, not a bare name off PATH. The builder frequently runs from a
+# service manager whose PATH does not include the per-user install dir uv's
+# installer writes to (`~/.local/bin`), and a bare "uv" then fails at spawn
+# with a bare ENOENT that says nothing about what is missing. Order: explicit
+# override, then PATH, then the install locations ci/README.md documents.
+function _default_uv_binary()
+    override = get(ENV, "JIMM_CI_UV", nothing)
+    override === nothing || return override
+    found = Sys.which("uv")
+    found === nothing || return String(found)
+    for candidate in
+        ("/usr/local/bin/uv", joinpath(homedir(), ".local", "bin", "uv"), "/usr/bin/uv")
+        isfile(candidate) && return candidate
+    end
+    # Nothing resolved; keep the bare name so the error surfaces at the call
+    # site, where `_uv_cmd` explains the fix.
+    return "uv"
 end
 
 function from_env()
@@ -66,6 +87,7 @@ function from_env()
         get(ENV, "JIMM_CI_PARITY_DIR", joinpath(state, "parity")),
         get(ENV, "UV_PROJECT_ENVIRONMENT", joinpath(state, "python-env")),
         get(ENV, "JIMM_CI_JULIA", "/usr/local/bin/julia"),
+        _default_uv_binary(),
         hf_token,
     )
 end

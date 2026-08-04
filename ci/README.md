@@ -201,6 +201,7 @@ not env strings.
 | `JIMM_CI_STATE_DIR` | no | `/var/lib/jimm-ci` | Mirror, worktrees, logs, depot |
 | `JIMM_CI_HF_TOKEN_FILE` | no | — | HuggingFace token for parity weights |
 | `JIMM_CI_JULIA` | no | `/usr/local/bin/julia` | Julia binary path |
+| `JIMM_CI_UV` | no | PATH lookup, then `/usr/local/bin/uv`, then `~/.local/bin/uv` | `uv` binary path, for the Python parity sidecars |
 | `JIMM_CI_PARITY_DIR` | no | `<state>/parity` | Where dumped HDF5 fixtures persist across worktrees |
 | `UV_PROJECT_ENVIRONMENT` | no | `<state>/python-env` | Persistent venv for the Python parity sidecars (PyTorch + timm) |
 | `JULIA_NUM_THREADS` | no | `4` | Forwarded to test jobs |
@@ -272,7 +273,8 @@ subdir = "ci/JimmCI")` instead. The launcher writes to
 The repo ships a thin `ci/JimmCI/bin/jimm-ci` shell wrapper as a
 fallback for environments where running `Pkg.Apps.develop` is awkward;
 it does `julia --project=... -e 'using JimmCI; JimmCI.cli_main()'` and
-honors `JIMM_CI_JULIA` for the Julia binary path.
+honors `JIMM_CI_JULIA` for the Julia binary path, and `JIMM_CI_UV` for
+`uv`'s.
 
 The runner creates `mirror.git`, `work/`, and `logs/` under
 `/var/lib/jimm-ci/` on first invocation. The parity sidecars need a
@@ -335,6 +337,8 @@ export JIMM_CI_HF_TOKEN_FILE=/etc/jimm-ci/hf-token
 export JIMM_CI_REPO_OWNER=<owner>
 export JIMM_CI_REPO_NAME=Luximm.jl
 export JIMM_CI_JULIA=/usr/local/bin/julia
+# Only needed if uv is not on the service PATH and not in a default location:
+# export JIMM_CI_UV=/home/ci/.local/bin/uv
 export UV_PROJECT_ENVIRONMENT=/var/lib/jimm-ci/python-env
 export JULIA_NUM_THREADS=4
 SH
