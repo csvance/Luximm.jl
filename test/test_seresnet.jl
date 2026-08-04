@@ -20,12 +20,15 @@ const VARIANTS_TO_TEST = Tuple(sort(collect(keys(Luximm.SERESNET_VARIANTS))))
     for variant in variant_filter(VARIANTS_TO_TEST)
         @testset "$(variant)" begin
             fixture = load_parity_fixture(variant)
-            if fixture === nothing
-                @info "skipping $variant: fixture missing at $(parity_fixture_path(variant))"
-                continue
-            end
             if hf_offline()
                 @info "skipping $variant: HF_OFFLINE=1"
+                continue
+            end
+            # Gated on its own fixture, so it still runs when the
+            # forward_features fixture is absent.
+            run_variant_feature_pyramid_parity(variant)
+            if fixture === nothing
+                @info "skipping $variant: fixture missing at $(parity_fixture_path(variant))"
                 continue
             end
             run_variant_parity(variant, fixture)

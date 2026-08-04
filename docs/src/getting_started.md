@@ -112,6 +112,76 @@ your own downstream head (regression, segmentation, neural ODE, etc.)
 without carrying around the 1000-class classifier the released
 checkpoint would otherwise initialize.
 
+## Feature-pyramid (multi-scale) mode
+
+`num_classes = 0` gives you one map, at the coarsest reduction. A
+dense-prediction decoder, UNet or FPN, needs the intermediate maps too,
+so it can recover the spatial detail the stride-32 map has thrown away.
+Pass `features_only = true` to get all of them; this is the Luximm
+analog of timm's `features_only=True`:
+
+```julia
+model, load = create_pretrained(:resnet18_a1_in1k; features_only = true)
+ps, st = Lux.setup(Xoshiro(0), model)
+ps, st = load(ps, st)
+st = Lux.testmode(st)
+
+x = randn(Float32, 224, 224, 3, 1)
+feats, _ = model(x, ps, st)               # a 5-tuple
+size.(feats)
+# ((112, 112,  64, 1),      reduction 2
+#  ( 56,  56,  64, 1),      reduction 4
+#  ( 28,  28, 128, 1),      reduction 8
+#  ( 14,  14, 256, 1),      reduction 16
+#  (  7,   7, 512, 1))      reduction 32
+```
+
+The forward returns a **tuple** ordered by increasing reduction, so
+`feats[1]` is the highest-resolution map and `feats[end]` the coarsest.
+That ordering is fixed, and a decoder can rely on it.
+
+[`feature_info`](@ref) is the tap table. Call it to size a decoder
+before you build it:
+
+```julia
+info = feature_info(:resnet18_a1_in1k)
+info.reductions                           # (2, 4, 8, 16, 32)
+info.channels                             # (64, 64, 128, 256, 512)
+info.names                                # (:act1, :layer1, :layer2, :layer3, :layer4)
+```
+
+`out_indices` selects a subset. It is **1-based**, so timm's
+`out_indices=(1, 2, 3, 4)` is Luximm's `(2, 3, 4, 5)`; indices must be
+strictly increasing, and the default `nothing` returns every tap:
+
+```julia
+model = create_model(:resnet18_a1_in1k;
+                     features_only = true, out_indices = (2, 3, 4, 5))
+feature_info(:resnet18_a1_in1k; out_indices = (2, 3, 4, 5)).channels
+# (64, 128, 256, 512)
+```
+
+Selecting fewer taps changes only the forward, never the parameter
+tree: every stage is still built and still runs. A features-only model
+has the *same* tree as the plain `num_classes = 0` extractor, which is
+why `create_pretrained` loads released weights into it unchanged.
+
+Two things to know about the tap tables:
+
+- ConvNeXt and ConvNeXt V2 have **no reduction-2 tap**. Their patch stem
+  strides by 4 in a single convolution, so the finest map is quarter
+  resolution and a decoder has to upsample past it. The ResNet families
+  do expose reduction 2.
+- For BiT ResNetV2 the reduction-32 tap is the raw `stage4` output,
+  which is **pre-activation**: `final_norm` is not applied, matching
+  timm, whose `norm` module sits after the last hooked stage. The same
+  model at `num_classes = 0` *does* apply it, so those two outputs
+  differ. The parameters are still there in `ps.final_norm` if you want
+  the normalized map.
+
+Families with a pyramid: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt,
+ConvNeXt V2. VGG, ViT, and CoAtNet raise an error explaining why.
+
 ## Single-channel and other non-RGB inputs
 
 Pass `in_chans` to `create_pretrained`. The closure adapts the

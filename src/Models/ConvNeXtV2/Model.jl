@@ -91,20 +91,78 @@ end
 
 # -- Top-level constructor -----------------------------------------------
 
-# Shared backbone forward, called from both branches of `convnextv2`.
+# Shared backbone forward, called from every branch of `convnextv2`.
 # Any future change to the backbone path (activation, downsample, stage
-# composition, etc.) lives here so the feature-extractor and classifier
-# branches can't desync.
-function _convnextv2_features(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4)
+# composition, etc.) lives here so the feature-extractor, features-only,
+# and classifier branches can't desync.
+function _convnextv2_feature_taps(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4)
     x = stem_norm(stem_conv(x))
-    x = stage1(x)
-    x = stage2(x)
-    x = stage3(x)
-    return stage4(x)
+    f4 = stage1(x)
+    f8 = stage2(f4)
+    f16 = stage3(f8)
+    f32 = stage4(f16)
+    return (f4, f8, f16, f32)
+end
+
+_convnextv2_features(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4) =
+    last(_convnextv2_feature_taps(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4))
+
+"""
+    convnextv2_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for a ConvNeXtV2, matching timm's `feature_info` for the
+`convnextv2_*` family: one tap per stage, at reductions 4/8/16/32. Like v1
+there is no reduction-2 tap, since the patch stem strides by 4 in a single
+convolution.
+
+The reduction-32 tap is the same tensor the `num_classes = 0` feature
+extractor returns.
+"""
+convnextv2_feature_info(cfg::ConvNeXtV2Variant) =
+    FeatureInfo((:stage1, :stage2, :stage3, :stage4), (4, 8, 16, 32), cfg.dims)
+
+# Backbone half, shared by the `num_classes = 0` feature extractor
+# (`out_sel = last`) and the features-only pyramid
+# (`out_sel = feature_selector(indices)`). Both build the identical slot
+# tree, so one pretrained mapping serves both.
+function _convnextv2_backbone(cfg::ConvNeXtV2Variant, in_chans::Int, out_sel)
+    depths = cfg.depths
+    dims = cfg.dims
+    strides = (1, 2, 2, 2)
+    @compact(
+        stem_conv = Conv(
+            (4, 4),
+            in_chans => dims[1];
+            stride = 4,
+            pad = 0,
+            use_bias = true,
+            cross_correlation = true,
+            init_weight = _CN_INIT,
+            init_bias = zeros32,
+        ),
+        stem_norm = layernorm2d(dims[1]),
+        stage1 = convnext_stage(convnextv2_block, dims[1], dims[1], depths[1], strides[1]),
+        stage2 = convnext_stage(convnextv2_block, dims[1], dims[2], depths[2], strides[2]),
+        stage3 = convnext_stage(convnextv2_block, dims[2], dims[3], depths[3], strides[3]),
+        stage4 = convnext_stage(convnextv2_block, dims[3], dims[4], depths[4], strides[4]),
+    ) do x
+        @return out_sel(
+            _convnextv2_feature_taps(
+                x,
+                stem_conv,
+                stem_norm,
+                stage1,
+                stage2,
+                stage3,
+                stage4,
+            ),
+        )
+    end
 end
 
 """
-    convnextv2(variant; in_chans=3, num_classes=0) -> @compact block
+    convnextv2(variant; in_chans=3, num_classes=0,
+               features_only=false, out_indices=nothing) -> @compact block
 
 Build a ConvNeXtV2 backbone. `variant` is a key from [`CONVNEXTV2_VARIANTS`]
 (e.g. `:convnextv2_atto_fcmae`).
@@ -113,11 +171,20 @@ When `num_classes == 0`, the forward pass returns the post-stage4 feature
 map shaped `(W/32, H/32, dims[4], N)`, matching
 `timm.create_model(..., num_classes=0).forward_features(x)`.
 
+When `features_only == true`, the forward returns a tuple of per-stage
+feature maps; see [`feature_info`](@ref) and [`create_model`](@ref).
+
 When `num_classes > 0`, a `NormMlpClassifierHead`-style head is attached
 (global mean pool → LayerNorm2d → flatten → Dense) and the forward returns
 logits shaped `(num_classes, N)`, matching `timm.forward(x)`.
 """
-function convnextv2(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function convnextv2(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
     cfg = get(CONVNEXTV2_VARIANTS, variant) do
         error(
             "Unknown ConvNeXtV2 variant: $variant. Known variants: " *
@@ -128,38 +195,14 @@ function convnextv2(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
     dims = cfg.dims
     strides = (1, 2, 2, 2)
 
+    if features_only
+        indices = resolve_out_indices(convnextv2_feature_info(cfg), out_indices, variant)
+        return _convnextv2_backbone(cfg, in_chans, feature_selector(indices))
+    end
+    _check_out_indices_unused(variant, out_indices)
+
     if num_classes == 0
-        @compact(
-            stem_conv = Conv(
-                (4, 4),
-                in_chans => dims[1];
-                stride = 4,
-                pad = 0,
-                use_bias = true,
-                cross_correlation = true,
-                init_weight = _CN_INIT,
-                init_bias = zeros32,
-            ),
-            stem_norm = layernorm2d(dims[1]),
-            stage1 =
-                convnext_stage(convnextv2_block, dims[1], dims[1], depths[1], strides[1]),
-            stage2 =
-                convnext_stage(convnextv2_block, dims[1], dims[2], depths[2], strides[2]),
-            stage3 =
-                convnext_stage(convnextv2_block, dims[2], dims[3], depths[3], strides[3]),
-            stage4 =
-                convnext_stage(convnextv2_block, dims[3], dims[4], depths[4], strides[4]),
-        ) do x
-            @return _convnextv2_features(
-                x,
-                stem_conv,
-                stem_norm,
-                stage1,
-                stage2,
-                stage3,
-                stage4,
-            )
-        end
+        _convnextv2_backbone(cfg, in_chans, last)
     else
         nc = num_classes
         @compact(

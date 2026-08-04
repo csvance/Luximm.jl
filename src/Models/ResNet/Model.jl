@@ -240,23 +240,87 @@ function classic_resnet_stage(
     return Chain(blocks...)
 end
 
-function _resnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4)
-    x = conv1(x)
-    x = NNlib.relu.(bn1(x))
-    x = NNlib.maxpool(x, (3, 3); stride = 2, pad = 1)
-    x = layer1(x)
-    x = layer2(x)
-    x = layer3(x)
-    return layer4(x)
+# Every intermediate map a features-only ResNet can hand back, ordered by
+# increasing reduction. `f2` is timm's `act1` tap: post-BN-ReLU, *before* the
+# stem maxpool. The three constructor branches all route through here, so the
+# feature-extractor, features-only, and classifier paths cannot desync.
+function _resnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4)
+    f2 = NNlib.relu.(bn1(conv1(x)))
+    x = NNlib.maxpool(f2, (3, 3); stride = 2, pad = 1)
+    f4 = layer1(x)
+    f8 = layer2(f4)
+    f16 = layer3(f8)
+    f32 = layer4(f16)
+    return (f2, f4, f8, f16, f32)
+end
+
+_resnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4) =
+    last(_resnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4))
+
+"""
+    resnet_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for a classic ResNet, matching timm's `feature_info`
+for the `resnet*` family: the post-`act1` stem map at reduction 2, then one
+tap per stage. The stem tap is always 64 channels; stage widths carry the
+block expansion (1 for `:basic`, 4 for `:bottleneck`).
+"""
+function resnet_feature_info(cfg::ResNetVariant)
+    expansion = _resnet_expansion(cfg.block)
+    return FeatureInfo(
+        (:act1, :layer1, :layer2, :layer3, :layer4),
+        (2, 4, 8, 16, 32),
+        (64, ntuple(i -> expansion * cfg.planes[i], 4)...),
+    )
+end
+
+# The backbone half of a ResNet, shared by the `num_classes = 0` feature
+# extractor (`out_sel = last`) and the features-only pyramid
+# (`out_sel = feature_selector(indices)`). Both build the identical slot
+# tree, so one pretrained mapping serves both.
+function _resnet_backbone(cfg::ResNetVariant, in_chans::Int, out_sel)
+    depths = cfg.layers
+    planes = cfg.planes
+    expansion = _resnet_expansion(cfg.block)
+    stage_chs = ntuple(i -> expansion * planes[i], 4)
+    @compact(
+        conv1 = Conv(
+            (7, 7),
+            in_chans => 64;
+            stride = 2,
+            pad = 3,
+            use_bias = false,
+            cross_correlation = true,
+            init_weight = _RESNET_CONV_INIT,
+        ),
+        bn1 = _resnet_bn(64),
+        layer1 = classic_resnet_stage(cfg.block, 64, planes[1], depths[1], 1),
+        layer2 = classic_resnet_stage(cfg.block, stage_chs[1], planes[2], depths[2], 2),
+        layer3 = classic_resnet_stage(cfg.block, stage_chs[2], planes[3], depths[3], 2),
+        layer4 = classic_resnet_stage(cfg.block, stage_chs[3], planes[4], depths[4], 2),
+    ) do x
+        @return out_sel(_resnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4))
+    end
 end
 
 """
-    resnet(variant; in_chans=3, num_classes=0) -> @compact block
+    resnet(variant; in_chans=3, num_classes=0,
+           features_only=false, out_indices=nothing) -> @compact block
 
 Build a classic timm ResNet. `variant` is a key from [`RESNET_VARIANTS`](@ref),
 for example `:resnet18_a1_in1k` or `:resnet50_a1_in1k`.
+
+With `features_only = true` the forward returns a tuple of intermediate
+feature maps instead of a single one; see [`feature_info`](@ref) for the tap
+table and [`create_model`](@ref) for the shared semantics.
 """
-function resnet(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function resnet(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
     cfg = get(RESNET_VARIANTS, variant) do
         error(
             "Unknown ResNet variant: $variant. Known variants: " *
@@ -268,25 +332,14 @@ function resnet(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
     expansion = _resnet_expansion(cfg.block)
     stage_chs = ntuple(i -> expansion * planes[i], 4)
 
+    if features_only
+        indices = resolve_out_indices(resnet_feature_info(cfg), out_indices, variant)
+        return _resnet_backbone(cfg, in_chans, feature_selector(indices))
+    end
+    _check_out_indices_unused(variant, out_indices)
+
     if num_classes == 0
-        @compact(
-            conv1 = Conv(
-                (7, 7),
-                in_chans => 64;
-                stride = 2,
-                pad = 3,
-                use_bias = false,
-                cross_correlation = true,
-                init_weight = _RESNET_CONV_INIT,
-            ),
-            bn1 = _resnet_bn(64),
-            layer1 = classic_resnet_stage(cfg.block, 64, planes[1], depths[1], 1),
-            layer2 = classic_resnet_stage(cfg.block, stage_chs[1], planes[2], depths[2], 2),
-            layer3 = classic_resnet_stage(cfg.block, stage_chs[2], planes[3], depths[3], 2),
-            layer4 = classic_resnet_stage(cfg.block, stage_chs[3], planes[4], depths[4], 2),
-        ) do x
-            @return _resnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4)
-        end
+        _resnet_backbone(cfg, in_chans, last)
     else
         nc = num_classes
         @compact(

@@ -24,6 +24,13 @@ const _FAMILY_SIDECAR = Dict{String,String}(
     "coatnet" => "test/parity/dump_coatnet_io.py",
 )
 
+# Sidecar for the `features_only` (feature-pyramid) fixtures, which are a
+# second fixture per variant named `<variant>_featsonly_io.h5` rather than a
+# per-family script. Only the five families with a pyramid have them; the
+# sidecar itself no-ops on a variant from any other family.
+const _FEATSONLY_SIDECAR = "test/parity/dump_features_only_io.py"
+const _FEATSONLY_FAMILIES = Set(["resnet", "seresnet", "bit", "convnext", "convnextv2"])
+
 struct Builder
     cfg::Config
     gh::GitHubApp
@@ -340,6 +347,25 @@ function _env_for_sidecar(cfg::Config)
     return env
 end
 
+# Build a `uv` command from the resolved binary in `cfg`, failing with an
+# actionable message rather than a bare spawn ENOENT. Worth the check: the
+# per-variant dump only spawns `uv` when a fixture is MISSING, so on a box
+# whose fixtures are all cached this path can sit unexercised for a long time
+# and a broken `uv` install only surfaces when a new fixture type lands.
+function _uv_cmd(cfg::Config, args::Vector{String})
+    exe = cfg.uv_binary
+    resolved = isabspath(exe) ? (isfile(exe) ? exe : nothing) : Sys.which(exe)
+    resolved === nothing && error(
+        "cannot find the `uv` executable (tried \"$exe\"). The parity " *
+        "sidecars need it. Install it per ci/README.md and either put it on " *
+        "the builder's PATH, symlink it into /usr/local/bin, or set " *
+        "JIMM_CI_UV to its absolute path. Note the builder often runs with a " *
+        "service-manager PATH that excludes ~/.local/bin, where uv's " *
+        "installer puts it.",
+    )
+    return Cmd(String[String(resolved), args...])
+end
+
 # ── Parity fixture dump ──────────────────────────────────────────────
 
 function _ensure_fixtures!(
@@ -362,6 +388,7 @@ function _ensure_fixtures!(
         for ic in (3, 1)
             _dump_variant_fixture!(b, job, wt, family, sidecar, variant, ic, on_line, token)
         end
+        _dump_featsonly_fixture!(b, job, wt, family, variant, on_line, token)
         return
     end
 
@@ -369,14 +396,43 @@ function _ensure_fixtures!(
     log_path = joinpath(b.cfg.log_dir, job.head_sha, "$family-dump.log")
     for ic in (3, 1)
         ic_args = ic == 3 ? String[] : ["--in-chans", "1"]
-        cmd = Cmd(
-            String["uv", "run", "--project", wt, "python", sidecar, "--all", ic_args...],
+        cmd = _uv_cmd(
+            b.cfg,
+            String["run", "--project", wt, "python", sidecar, "--all", ic_args...],
         )
         env = _env_for_sidecar(b.cfg)
         rc = _stream_subprocess(cmd, env, log_path, on_line, token; cwd = wt)
         rc == 0 || error(
             "parity dump for $family/all in_chans=$ic " * "failed (rc=$rc); see $log_path",
         )
+    end
+
+    # The `features_only` fixtures are a separate sidecar and a separate file
+    # per variant; without this the pyramid testsets silently skip.
+    if family in _FEATSONLY_FAMILIES
+        fo_log = joinpath(b.cfg.log_dir, job.head_sha, "$family-featsonly-dump.log")
+        cmd = _uv_cmd(
+            b.cfg,
+            String[
+                "run",
+                "--project",
+                wt,
+                "python",
+                _FEATSONLY_SIDECAR,
+                "--all",
+                "--family",
+                family,
+            ],
+        )
+        rc = _stream_subprocess(
+            cmd,
+            _env_for_sidecar(b.cfg),
+            fo_log,
+            on_line,
+            token;
+            cwd = wt,
+        )
+        rc == 0 || error("features_only dump for $family/all failed (rc=$rc); see $fo_log")
     end
 
     # The worktree scripts may not know about JIMM_PARITY_DIR, so they
@@ -418,7 +474,7 @@ function _dump_variant_fixture!(
     if !isfile(fixture)
         args = ["--variant", variant, "--in-chans", string(in_chans), "--out", fixture]
         log_path = joinpath(b.cfg.log_dir, job.head_sha, "$(family)$(suffix)-dump.log")
-        cmd = Cmd(String["uv", "run", "--project", wt, "python", sidecar, args...])
+        cmd = _uv_cmd(b.cfg, String["run", "--project", wt, "python", sidecar, args...])
         env = _env_for_sidecar(b.cfg)
         rc = _stream_subprocess(cmd, env, log_path, on_line, token; cwd = wt)
         rc == 0 || error(
@@ -427,6 +483,37 @@ function _dump_variant_fixture!(
         )
     end
     _link_fixture_into_worktree(fixture, wt)
+end
+
+# Dump the `features_only` (feature-pyramid) fixture for one variant. Named
+# `<variant>_featsonly_io.h5` and consumed by
+# `run_variant_feature_pyramid_parity`. Families without a pyramid are
+# skipped here rather than in the sidecar, so no subprocess is spawned.
+function _dump_featsonly_fixture!(
+    b::Builder,
+    job::Job,
+    wt::AbstractString,
+    family::AbstractString,
+    variant::AbstractString,
+    on_line::Function,
+    token::BuildCancel,
+)
+    family in _FEATSONLY_FAMILIES || return
+    fixture = joinpath(b.cfg.parity_dir, "$(variant)_featsonly_io.h5")
+    if !isfile(fixture)
+        args = ["--variant", variant, "--out", fixture]
+        log_path = joinpath(b.cfg.log_dir, job.head_sha, "$(family)-featsonly-dump.log")
+        cmd = _uv_cmd(
+            b.cfg,
+            String["run", "--project", wt, "python", _FEATSONLY_SIDECAR, args...],
+        )
+        env = _env_for_sidecar(b.cfg)
+        rc = _stream_subprocess(cmd, env, log_path, on_line, token; cwd = wt)
+        rc == 0 ||
+            error("features_only dump for $family/$variant failed (rc=$rc); see $log_path")
+    end
+    isfile(fixture) && _link_fixture_into_worktree(fixture, wt)
+    return
 end
 
 # Symlink a cached fixture from `cfg.parity_dir` into the worktree's

@@ -99,20 +99,73 @@ end
 # itself, which would leak v1-specific configuration into shared code.
 _convnext_block_for(ls_init::Float32) = C -> convnext_block(C; ls_init = ls_init)
 
-# Shared backbone forward, called from both branches of `convnext`. Any
+# Shared backbone forward, called from every branch of `convnext`. Any
 # future change to the backbone path (activation, downsample, stage
-# composition, etc.) lives here so the feature-extractor and classifier
-# branches can't desync.
-function _convnext_features(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4)
+# composition, etc.) lives here so the feature-extractor, features-only,
+# and classifier branches can't desync.
+function _convnext_feature_taps(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4)
     x = stem_norm(stem_conv(x))
-    x = stage1(x)
-    x = stage2(x)
-    x = stage3(x)
-    return stage4(x)
+    f4 = stage1(x)
+    f8 = stage2(f4)
+    f16 = stage3(f8)
+    f32 = stage4(f16)
+    return (f4, f8, f16, f32)
+end
+
+_convnext_features(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4) =
+    last(_convnext_feature_taps(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4))
+
+"""
+    convnext_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for a ConvNeXt v1, matching timm's `feature_info` for
+the `convnext_*` family: one tap per stage, at reductions 4/8/16/32. There is
+no reduction-2 tap, because the patch stem strides by 4 in a single
+convolution; a decoder that needs half resolution must upsample past the
+finest tap.
+
+The reduction-32 tap is the same tensor the `num_classes = 0` feature
+extractor returns: timm's `norm_pre` is `Identity` for every registered
+variant, so nothing sits between the last stage and the head.
+"""
+convnext_feature_info(cfg::ConvNeXtVariant) =
+    FeatureInfo((:stage1, :stage2, :stage3, :stage4), (4, 8, 16, 32), cfg.dims)
+
+# Backbone half, shared by the `num_classes = 0` feature extractor
+# (`out_sel = last`) and the features-only pyramid
+# (`out_sel = feature_selector(indices)`). Both build the identical slot
+# tree, so one pretrained mapping serves both.
+function _convnext_backbone(cfg::ConvNeXtVariant, in_chans::Int, out_sel)
+    depths = cfg.depths
+    dims = cfg.dims
+    strides = (1, 2, 2, 2)
+    block_ctor = _convnext_block_for(cfg.ls_init)
+    @compact(
+        stem_conv = Conv(
+            (4, 4),
+            in_chans => dims[1];
+            stride = 4,
+            pad = 0,
+            use_bias = true,
+            cross_correlation = true,
+            init_weight = _CN_INIT,
+            init_bias = zeros32,
+        ),
+        stem_norm = layernorm2d(dims[1]),
+        stage1 = convnext_stage(block_ctor, dims[1], dims[1], depths[1], strides[1]),
+        stage2 = convnext_stage(block_ctor, dims[1], dims[2], depths[2], strides[2]),
+        stage3 = convnext_stage(block_ctor, dims[2], dims[3], depths[3], strides[3]),
+        stage4 = convnext_stage(block_ctor, dims[3], dims[4], depths[4], strides[4]),
+    ) do x
+        @return out_sel(
+            _convnext_feature_taps(x, stem_conv, stem_norm, stage1, stage2, stage3, stage4),
+        )
+    end
 end
 
 """
-    convnext(variant; in_chans=3, num_classes=0) -> @compact block
+    convnext(variant; in_chans=3, num_classes=0,
+             features_only=false, out_indices=nothing) -> @compact block
 
 Build a ConvNeXt v1 backbone. `variant` is a key from [`CONVNEXT_VARIANTS`]
 (e.g. `:convnext_tiny_dinov3_lvd1689m`).
@@ -121,6 +174,10 @@ When `num_classes == 0`, the forward pass returns the post-stage4 feature
 map shaped `(W/32, H/32, dims[4], N)`, matching
 `timm.create_model(..., num_classes=0).forward_features(x)`.
 
+When `features_only == true`, the forward returns a tuple of per-stage
+feature maps; see [`feature_info`](@ref) for the tap table and
+[`create_model`](@ref) for the shared semantics.
+
 When `num_classes > 0`, a `NormMlpClassifierHead`-style head is attached
 (global mean pool → LayerNorm2d → flatten → Dense) and the forward returns
 logits shaped `(num_classes, N)`, matching `timm.forward(x)`. None of the
@@ -128,7 +185,13 @@ DINOv3 variants currently registered ship a usable head, so this branch
 is exercised only when extending the variant table with future
 checkpoints.
 """
-function convnext(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function convnext(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
     cfg = get(CONVNEXT_VARIANTS, variant) do
         error(
             "Unknown ConvNeXt variant: $variant. Known variants: " *
@@ -140,34 +203,14 @@ function convnext(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
     strides = (1, 2, 2, 2)
     block_ctor = _convnext_block_for(cfg.ls_init)
 
+    if features_only
+        indices = resolve_out_indices(convnext_feature_info(cfg), out_indices, variant)
+        return _convnext_backbone(cfg, in_chans, feature_selector(indices))
+    end
+    _check_out_indices_unused(variant, out_indices)
+
     if num_classes == 0
-        @compact(
-            stem_conv = Conv(
-                (4, 4),
-                in_chans => dims[1];
-                stride = 4,
-                pad = 0,
-                use_bias = true,
-                cross_correlation = true,
-                init_weight = _CN_INIT,
-                init_bias = zeros32,
-            ),
-            stem_norm = layernorm2d(dims[1]),
-            stage1 = convnext_stage(block_ctor, dims[1], dims[1], depths[1], strides[1]),
-            stage2 = convnext_stage(block_ctor, dims[1], dims[2], depths[2], strides[2]),
-            stage3 = convnext_stage(block_ctor, dims[2], dims[3], depths[3], strides[3]),
-            stage4 = convnext_stage(block_ctor, dims[3], dims[4], depths[4], strides[4]),
-        ) do x
-            @return _convnext_features(
-                x,
-                stem_conv,
-                stem_norm,
-                stage1,
-                stage2,
-                stage3,
-                stage4,
-            )
-        end
+        _convnext_backbone(cfg, in_chans, last)
     else
         nc = num_classes
         @compact(

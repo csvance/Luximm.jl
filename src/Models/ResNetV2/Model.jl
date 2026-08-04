@@ -34,23 +34,88 @@ const _BIT_HEAD_INIT = normal_init(; std = 0.01f0)
 # Shared backbone forward, called from both branches of `bit_resnetv2`.
 # Any future change to the backbone path (activation, padding, pool, etc.)
 # lives here so the feature-extractor and classifier branches can't desync.
-function _bit_resnetv2_features(x, stem_conv, stage1, stage2, stage3, stage4, final_norm)
-    x = stem_conv(x)
+# Every intermediate map a features-only BiT can hand back, ordered by
+# increasing reduction. `f2` is timm's `stem.conv` tap: the stem convolution's
+# output, *before* the pad+maxpool. All three constructor branches route
+# through here so they cannot desync.
+#
+# NOTE the last tap is the raw `stage4` output, which is **pre-activation**:
+# `final_norm` (GroupNorm + ReLU) is deliberately not applied, matching what
+# timm's `features_only=True` hands back for the preact ResNetV2 family (its
+# `norm` module sits after the last hooked stage). `forward_features` on the
+# same model *does* apply it, so the reduction-32 pyramid tap and the
+# `num_classes = 0` output are not the same tensor. A decoder consuming the
+# reduction-32 tap should normalize it itself.
+function _bit_resnetv2_feature_taps(x, stem_conv, stage1, stage2, stage3, stage4)
+    f2 = stem_conv(x)
     # timm BiT pads with **zeros** before the maxpool (ConstantPad2d(value=0)),
     # then pools with no internal padding. NNlib's maxpool(pad=1) uses
     # -Inf padding, which yields different output near negative-valued
     # boundaries. Pad explicitly with zeros to match timm.
-    x = NNlib.pad_zeros(x, (1, 1, 1, 1, 0, 0, 0, 0))
+    x = NNlib.pad_zeros(f2, (1, 1, 1, 1, 0, 0, 0, 0))
     x = NNlib.maxpool(x, (3, 3); stride = 2, pad = 0)
-    x = stage1(x)
-    x = stage2(x)
-    x = stage3(x)
-    x = stage4(x)
-    return final_norm(x)
+    f4 = stage1(x)
+    f8 = stage2(f4)
+    f16 = stage3(f8)
+    f32 = stage4(f16)
+    return (f2, f4, f8, f16, f32)
+end
+
+_bit_resnetv2_features(x, stem_conv, stage1, stage2, stage3, stage4, final_norm) =
+    final_norm(
+        last(_bit_resnetv2_feature_taps(x, stem_conv, stage1, stage2, stage3, stage4)),
+    )
+
+"""
+    bit_resnetv2_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for a BiT ResNetV2, matching timm's `feature_info` for
+the `resnetv2_*` family: the stem convolution's output at reduction 2 (before
+the maxpool), then one tap per stage.
+"""
+function bit_resnetv2_feature_info(cfg::BiTVariant)
+    return FeatureInfo(
+        (:stem_conv, :stage1, :stage2, :stage3, :stage4),
+        (2, 4, 8, 16, 32),
+        (cfg.stem_chs, cfg.stage_chs...),
+    )
+end
+
+# Backbone half in features-only mode. The `final_norm` slot is built but not
+# called: the pyramid stops at `stage4` (see the note above), and keeping the
+# slot makes the parameter tree byte-identical to the feature-extractor tree
+# so `_load_bit_resnetv2` applies unchanged. The cost is one unused GroupNorm's
+# affine parameters (2 * num_features floats).
+function _bit_resnetv2_pyramid(cfg::BiTVariant, in_chans::Int, out_sel)
+    depths = cfg.layers
+    widths = cfg.stage_chs
+    strides = (1, 2, 2, 2)
+    stem_chs = cfg.stem_chs
+    @compact(
+        stem_conv = std_conv(
+            7,
+            7,
+            in_chans,
+            stem_chs;
+            stride = 2,
+            pad = 3,
+            init_weight = _BIT_CONV_INIT,
+        ),
+        stage1 = resnet_stage(stem_chs, widths[1], depths[1], strides[1]),
+        stage2 = resnet_stage(widths[1], widths[2], depths[2], strides[2]),
+        stage3 = resnet_stage(widths[2], widths[3], depths[3], strides[3]),
+        stage4 = resnet_stage(widths[3], widths[4], depths[4], strides[4]),
+        final_norm = gn_act(widths[4]),
+    ) do x
+        @return out_sel(
+            _bit_resnetv2_feature_taps(x, stem_conv, stage1, stage2, stage3, stage4),
+        )
+    end
 end
 
 """
-    bit_resnetv2(variant; in_chans=3, num_classes=0) -> @compact block
+    bit_resnetv2(variant; in_chans=3, num_classes=0,
+                 features_only=false, out_indices=nothing) -> @compact block
 
 Build a BiT ResNetV2 backbone. `variant` is a key from [`BIT_VARIANTS`]
 (e.g. `:resnetv2_50x1_bit_goog_in21k`).
@@ -59,12 +124,25 @@ When `num_classes == 0`, the forward pass returns the post-`final_norm`
 feature map shaped `(W/32, H/32, num_features, N)`, matching
 `timm.create_model(..., num_classes=0).forward_features(x)`.
 
+When `features_only == true`, the forward returns a tuple of intermediate
+feature maps. Mind the preact caveat: the reduction-32 tap is the raw
+`stage4` output, *not* the `final_norm`-applied map this same constructor
+returns at `num_classes == 0`. That matches timm, whose `norm` module sits
+after the last hooked stage. See [`feature_info`](@ref) and
+[`create_model`](@ref).
+
 When `num_classes > 0`, a `ClassifierHead`-style head is attached
 (global avg pool → 1×1 conv → flatten) and the forward pass returns
 logits shaped `(num_classes, N)`, matching
 `timm.create_model(..., num_classes=num_classes).forward(x)`.
 """
-function bit_resnetv2(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function bit_resnetv2(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
     cfg = get(BIT_VARIANTS, variant) do
         error(
             "Unknown BiT variant: $variant. Known variants: " *
@@ -75,6 +153,12 @@ function bit_resnetv2(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
     widths = cfg.stage_chs
     strides = (1, 2, 2, 2)
     stem_chs = cfg.stem_chs
+
+    if features_only
+        indices = resolve_out_indices(bit_resnetv2_feature_info(cfg), out_indices, variant)
+        return _bit_resnetv2_pyramid(cfg, in_chans, feature_selector(indices))
+    end
+    _check_out_indices_unused(variant, out_indices)
 
     if num_classes == 0
         @compact(

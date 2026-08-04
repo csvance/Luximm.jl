@@ -170,7 +170,9 @@ When the user picks a job, the builder:
 * dumps the family's timm parity fixture(s) into a persistent
   `<state>/parity/` directory (symlinked into the worktree's
   `data/parity/`) via `uv run python test/parity/dump_<family>_io.py …`
-  if the fixture is missing;
+  if the fixture is missing, plus, for the five families with a feature
+  pyramid, the `<variant>_featsonly_io.h5` fixtures via the shared
+  `test/parity/dump_features_only_io.py` sidecar;
 * runs `julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'`
   inside a detached `git worktree` with `JIMM_TEST_FAMILIES` /
   `JIMM_TEST_VARIANTS` set;
@@ -199,6 +201,7 @@ not env strings.
 | `JIMM_CI_STATE_DIR` | no | `/var/lib/jimm-ci` | Mirror, worktrees, logs, depot |
 | `JIMM_CI_HF_TOKEN_FILE` | no | — | HuggingFace token for parity weights |
 | `JIMM_CI_JULIA` | no | `/usr/local/bin/julia` | Julia binary path |
+| `JIMM_CI_UV` | no | PATH lookup, then `/usr/local/bin/uv`, then `~/.local/bin/uv` | `uv` binary path, for the Python parity sidecars |
 | `JIMM_CI_PARITY_DIR` | no | `<state>/parity` | Where dumped HDF5 fixtures persist across worktrees |
 | `UV_PROJECT_ENVIRONMENT` | no | `<state>/python-env` | Persistent venv for the Python parity sidecars (PyTorch + timm) |
 | `JULIA_NUM_THREADS` | no | `4` | Forwarded to test jobs |
@@ -270,7 +273,8 @@ subdir = "ci/JimmCI")` instead. The launcher writes to
 The repo ships a thin `ci/JimmCI/bin/jimm-ci` shell wrapper as a
 fallback for environments where running `Pkg.Apps.develop` is awkward;
 it does `julia --project=... -e 'using JimmCI; JimmCI.cli_main()'` and
-honors `JIMM_CI_JULIA` for the Julia binary path.
+honors `JIMM_CI_JULIA` for the Julia binary path, and `JIMM_CI_UV` for
+`uv`'s.
 
 The runner creates `mirror.git`, `work/`, and `logs/` under
 `/var/lib/jimm-ci/` on first invocation. The parity sidecars need a
@@ -333,6 +337,8 @@ export JIMM_CI_HF_TOKEN_FILE=/etc/jimm-ci/hf-token
 export JIMM_CI_REPO_OWNER=<owner>
 export JIMM_CI_REPO_NAME=Luximm.jl
 export JIMM_CI_JULIA=/usr/local/bin/julia
+# Only needed if uv is not on the service PATH and not in a default location:
+# export JIMM_CI_UV=/home/ci/.local/bin/uv
 export UV_PROJECT_ENVIRONMENT=/var/lib/jimm-ci/python-env
 export JULIA_NUM_THREADS=4
 SH
@@ -453,6 +459,13 @@ fixture, and the Check Run goes green without testing anything):
    without an entry `_ensure_fixtures!` dumps nothing.
 3. `scripts/test_variant.sh` — the `case "$variant"` family→sidecar block
    (mirrors `test/_filter.jl::_jimm_variant_family`).
+
+If the new family also builds a feature pyramid (`features_only = true`),
+it needs a second fixture per variant and three more edits, or every
+variant's pyramid testset skips on a missing `<variant>_featsonly_io.h5`:
+`FEATURES_ONLY_VARIANTS` in `test/parity/dump_features_only_io.py`,
+`_FEATSONLY_FAMILIES` in `Builder.jl`, and the `has_pyramid=1` marker in
+`scripts/test_variant.sh`.
 4. `test/_ci_driver.jl` — `_DRIVER_ORDER` and `_dispatch_family` (and the
    scaffold `isdefined` asserts).
 5. `test/_filter.jl` — `_JIMM_DEFAULT_FAMILIES` and `_jimm_variant_family`.

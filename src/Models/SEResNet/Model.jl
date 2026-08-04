@@ -162,23 +162,84 @@ function seresnet_stage(
     return Chain(blocks...)
 end
 
-function _seresnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4)
-    x = conv1(x)
-    x = NNlib.relu.(bn1(x))
-    x = NNlib.maxpool(x, (3, 3); stride = 2, pad = 1)
-    x = layer1(x)
-    x = layer2(x)
-    x = layer3(x)
-    return layer4(x)
+# Ordered feature taps, same layout as the classic ResNet: `f2` is timm's
+# `act1` map (post-BN-ReLU, before the stem maxpool), then one tap per stage.
+# All three constructor branches route through here so they cannot desync.
+function _seresnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4)
+    f2 = NNlib.relu.(bn1(conv1(x)))
+    x = NNlib.maxpool(f2, (3, 3); stride = 2, pad = 1)
+    f4 = layer1(x)
+    f8 = layer2(f4)
+    f16 = layer3(f8)
+    f32 = layer4(f16)
+    return (f2, f4, f8, f16, f32)
+end
+
+_seresnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4) =
+    last(_seresnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4))
+
+"""
+    seresnet_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for an SE-ResNet, matching timm's `feature_info` for the
+`seresnet*` family. Every registered variant is a bottleneck net, so stage
+widths are `4 * planes`.
+"""
+function seresnet_feature_info(cfg::SEResNetVariant)
+    return FeatureInfo(
+        (:act1, :layer1, :layer2, :layer3, :layer4),
+        (2, 4, 8, 16, 32),
+        (64, ntuple(i -> 4 * cfg.planes[i], 4)...),
+    )
+end
+
+# Backbone half, shared by the `num_classes = 0` feature extractor
+# (`out_sel = last`) and the features-only pyramid. Identical slot tree, so
+# one pretrained mapping serves both.
+function _seresnet_backbone(cfg::SEResNetVariant, in_chans::Int, out_sel)
+    depths = cfg.layers
+    planes = cfg.planes
+    red = cfg.se_reduction
+    stage_chs = ntuple(i -> 4 * planes[i], 4)
+    @compact(
+        conv1 = Conv(
+            (7, 7),
+            in_chans => 64;
+            stride = 2,
+            pad = 3,
+            use_bias = false,
+            cross_correlation = true,
+            init_weight = _RESNET_CONV_INIT,
+        ),
+        bn1 = _resnet_bn(64),
+        layer1 = seresnet_stage(64, planes[1], depths[1], 1, red),
+        layer2 = seresnet_stage(stage_chs[1], planes[2], depths[2], 2, red),
+        layer3 = seresnet_stage(stage_chs[2], planes[3], depths[3], 2, red),
+        layer4 = seresnet_stage(stage_chs[3], planes[4], depths[4], 2, red),
+    ) do x
+        @return out_sel(
+            _seresnet_feature_taps(x, conv1, bn1, layer1, layer2, layer3, layer4),
+        )
+    end
 end
 
 """
-    seresnet(variant; in_chans=3, num_classes=0) -> @compact block
+    seresnet(variant; in_chans=3, num_classes=0,
+             features_only=false, out_indices=nothing) -> @compact block
 
 Build a timm SE-ResNet. `variant` is a key from [`SERESNET_VARIANTS`](@ref),
 e.g. `:seresnet50_a1_in1k`.
+
+With `features_only = true` the forward returns a tuple of intermediate
+feature maps; see [`feature_info`](@ref) and [`create_model`](@ref).
 """
-function seresnet(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function seresnet(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
     cfg = get(SERESNET_VARIANTS, variant) do
         error(
             "Unknown SE-ResNet variant: $variant. Known variants: " *
@@ -190,25 +251,14 @@ function seresnet(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
     red = cfg.se_reduction
     stage_chs = ntuple(i -> 4 * planes[i], 4)
 
+    if features_only
+        indices = resolve_out_indices(seresnet_feature_info(cfg), out_indices, variant)
+        return _seresnet_backbone(cfg, in_chans, feature_selector(indices))
+    end
+    _check_out_indices_unused(variant, out_indices)
+
     if num_classes == 0
-        @compact(
-            conv1 = Conv(
-                (7, 7),
-                in_chans => 64;
-                stride = 2,
-                pad = 3,
-                use_bias = false,
-                cross_correlation = true,
-                init_weight = _RESNET_CONV_INIT,
-            ),
-            bn1 = _resnet_bn(64),
-            layer1 = seresnet_stage(64, planes[1], depths[1], 1, red),
-            layer2 = seresnet_stage(stage_chs[1], planes[2], depths[2], 2, red),
-            layer3 = seresnet_stage(stage_chs[2], planes[3], depths[3], 2, red),
-            layer4 = seresnet_stage(stage_chs[3], planes[4], depths[4], 2, red),
-        ) do x
-            @return _seresnet_features(x, conv1, bn1, layer1, layer2, layer3, layer4)
-        end
+        _seresnet_backbone(cfg, in_chans, last)
     else
         nc = num_classes
         @compact(

@@ -147,7 +147,17 @@ When `num_classes == 0`, the forward returns the post-`features` map shaped
 attached and the forward returns logits `(num_classes, N)`, matching
 `timm.forward(x)`.
 """
-function vgg(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function vgg(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
+    # No pyramid yet: the conv stack is one flat Chain, so tapping at the
+    # pool boundaries means splitting it into per-stage sub-chains and
+    # reworking `vgg_mapping` / `vgg_state_mapping` for the nested paths.
+    _no_feature_pyramid("VGG", variant, features_only, out_indices)
     cfg = get(VGG_VARIANTS, variant) do
         error(
             "Unknown VGG variant: $variant. Known variants: " *

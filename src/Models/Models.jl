@@ -13,6 +13,11 @@ using ..Interop:
     as_token_norm,
     adapt_input_conv
 
+# The feature-pyramid interface (`FeatureInfo`, `resolve_out_indices`,
+# `feature_selector`) is referenced by every family's Model.jl, so it comes
+# first.
+include("FeatureInfo.jl")
+
 # Shared ConvNeXt v1/v2 building blocks must be included before either
 # family's Model.jl, since both reference `_CN_INIT`, `convnext_stage`, the
 # mapping-entry builders, etc.
@@ -45,9 +50,51 @@ ps, st = Lux.setup(rng, model)        # random init, ready for training
 ```
 
 `kwargs` are forwarded to the family constructor (`in_chans`,
-`num_classes`).
+`num_classes`, `features_only`, `out_indices`).
+
+# Feature-pyramid mode
+
+`features_only = true` is the Luximm analog of timm's
+`features_only=True`: the forward returns a **tuple** of intermediate
+feature maps ordered by increasing reduction (highest resolution first)
+instead of a single map. This is what a UNet or FPN decoder consumes.
+
+```julia
+model = create_model(:resnet18_a1_in1k; features_only = true)
+ps, st = Lux.setup(rng, model)
+feats, st = model(x, ps, st)          # NTuple{5, Array{Float32, 4}}
+size.(feats, 3)                       # (64, 64, 128, 256, 512)
+```
+
+`out_indices` selects a subset of the family's taps. It is **1-based**, so
+timm's `out_indices=(1, 2, 3, 4)` is Luximm's `(2, 3, 4, 5)`. Indices must
+be strictly increasing; `nothing` (the default) returns every tap. Query
+the tap table with [`feature_info`](@ref):
+
+```julia
+feature_info(:resnet18_a1_in1k).reductions          # (2, 4, 8, 16, 32)
+model = create_model(:resnet18_a1_in1k;
+                     features_only = true, out_indices = (2, 3, 4, 5))
+```
+
+A features-only model always has `num_classes = 0` (passing anything else
+is an error) and builds the **same parameter tree** as the plain
+`num_classes = 0` feature extractor, so `create_pretrained` loads released
+weights into it unchanged. Selecting fewer taps changes only the forward,
+never the tree: every stage is still built and still runs.
+
+Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2.
+VGG, ViT, and CoAtNet raise an error explaining why.
 """
 function create_model(variant::Symbol; kwargs...)
+    if get(kwargs, :features_only, false)
+        nc = get(kwargs, :num_classes, 0)
+        nc == 0 || error(
+            "`features_only = true` requires `num_classes = 0`; got $nc. " *
+            "A features-only model returns intermediate feature maps and has " *
+            "no classifier head.",
+        )
+    end
     if haskey(BIT_VARIANTS, variant)
         return bit_resnetv2(variant; kwargs...)
     elseif haskey(RESNET_VARIANTS, variant)
@@ -107,7 +154,59 @@ function default_num_classes(variant::Symbol)
 end
 
 """
+    feature_info(variant; out_indices=nothing) -> FeatureInfo
+
+Tap table for `variant` in feature-pyramid mode: the reduction (spatial
+stride) and channel count of each feature map a
+`create_model(variant; features_only = true)` model returns, ordered by
+increasing reduction. The Luximm analog of timm's `model.feature_info`.
+
+Call this to size a decoder before building it: a UNet needs the skip
+channel counts, an FPN needs them to size its lateral 1×1 convolutions.
+
+```julia
+info = feature_info(:resnet18_a1_in1k)
+info.reductions              # (2, 4, 8, 16, 32)
+info.channels                # (64, 64, 128, 256, 512)
+
+info = feature_info(:resnet18_a1_in1k; out_indices = (2, 3, 4, 5))
+info.channels                # (64, 128, 256, 512)
+```
+
+`out_indices` is validated exactly as `create_model` validates it, so the
+returned info always describes the tuple that model's forward produces.
+Families without a pyramid (VGG, ViT, CoAtNet) raise an error.
+"""
+function feature_info(variant::Symbol; out_indices = nothing)
+    full = if haskey(BIT_VARIANTS, variant)
+        bit_resnetv2_feature_info(BIT_VARIANTS[variant])
+    elseif haskey(RESNET_VARIANTS, variant)
+        resnet_feature_info(RESNET_VARIANTS[variant])
+    elseif haskey(CONVNEXT_VARIANTS, variant)
+        convnext_feature_info(CONVNEXT_VARIANTS[variant])
+    elseif haskey(CONVNEXTV2_VARIANTS, variant)
+        convnextv2_feature_info(CONVNEXTV2_VARIANTS[variant])
+    elseif haskey(SERESNET_VARIANTS, variant)
+        seresnet_feature_info(SERESNET_VARIANTS[variant])
+    elseif haskey(VGG_VARIANTS, variant)
+        _no_feature_pyramid("VGG", variant, true, nothing)
+    elseif haskey(VIT_VARIANTS, variant)
+        _no_feature_pyramid("ViT", variant, true, nothing)
+    elseif haskey(COATNET_VARIANTS, variant)
+        _no_feature_pyramid("CoAtNet", variant, true, nothing)
+    else
+        error(
+            "Unknown variant: $variant. Not found in any of " *
+            "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
+            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+        )
+    end
+    return select_features(full, resolve_out_indices(full, out_indices, variant))
+end
+
+"""
     create_pretrained(variant; in_chans=3, num_classes=nothing,
+                      features_only=false, out_indices=nothing,
                       revision="main", cache_dir=hf_hub_cache_dir(),
                       prefix=()) -> (model, load)
 
@@ -145,17 +244,45 @@ end
 ps, st = Lux.setup(rng, outer)
 ps, st = load_backbone(ps, st)
 ```
+
+`features_only = true` builds the feature-pyramid model described in
+[`create_model`](@ref) and loads the released backbone weights into it. The
+parameter tree is identical to the `num_classes = 0` feature extractor, so
+this is the same load path; only the forward differs:
+
+```julia
+backbone, load = create_pretrained(:resnet18_a1_in1k;
+    in_chans = 1, features_only = true, prefix = (:backbone,))
+info = feature_info(:resnet18_a1_in1k)   # decoder widths
+```
 """
 function create_pretrained(
     variant::Symbol;
     in_chans::Int = 3,
     num_classes::Union{Int,Nothing} = nothing,
+    features_only::Bool = false,
+    out_indices = nothing,
     revision::AbstractString = "main",
     cache_dir::AbstractString = hf_hub_cache_dir(),
     prefix::Tuple{Vararg{Symbol}} = (),
 )
-    nc = num_classes === nothing ? default_num_classes(variant) : num_classes
-    model = create_model(variant; in_chans = in_chans, num_classes = nc)
+    nc = if features_only
+        (num_classes === nothing || num_classes == 0) || error(
+            "`features_only = true` requires `num_classes = 0` (or the " *
+            "default `nothing`); got $num_classes. A features-only model " *
+            "returns intermediate feature maps and has no classifier head.",
+        )
+        0
+    else
+        num_classes === nothing ? default_num_classes(variant) : num_classes
+    end
+    model = create_model(
+        variant;
+        in_chans = in_chans,
+        num_classes = nc,
+        features_only = features_only,
+        out_indices = out_indices,
+    )
     load =
         (ps, st) -> _load_pretrained(
             ps,
@@ -297,8 +424,10 @@ export BiTVariant,
     VIT_VARIANTS,
     CoAtNetVariant,
     COATNET_VARIANTS,
+    FeatureInfo,
     create_model,
     create_pretrained,
-    default_num_classes
+    default_num_classes,
+    feature_info
 
 end # module Models

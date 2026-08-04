@@ -63,6 +63,8 @@ fi
 # reach the Julia side as the underscore-form key.
 variant="${variant//./_}"
 
+featsonly_sidecar="test/parity/dump_features_only_io.py"
+
 # Run from the repo root so all relative paths resolve consistently.
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd "$script_dir/.." && pwd)
@@ -71,21 +73,30 @@ cd "$repo_root"
 # Family resolution mirrors test/_filter.jl::_jimm_variant_family. Order
 # matters here: convnextv2_* must come before convnext_*, because both
 # patterns share the "convnext" prefix.
+# `has_pyramid` gates the second fixture: the five families with a feature
+# pyramid also need `<variant>_featsonly_io.h5`, dumped by a shared sidecar.
+# Without it the pyramid testset silently skips on "fixture missing".
+has_pyramid=0
 case "$variant" in
     convnextv2_*)
         sidecar="test/parity/dump_convnextv2_io.py"
+        has_pyramid=1
         ;;
     convnext_*)
         sidecar="test/parity/dump_convnext_io.py"
+        has_pyramid=1
         ;;
     resnetv2_*_bit_*)
         sidecar="test/parity/dump_resnetv2_bit_io.py"
+        has_pyramid=1
         ;;
     seresnet*)
         sidecar="test/parity/dump_seresnet_io.py"
+        has_pyramid=1
         ;;
     resnet*)
         sidecar="test/parity/dump_resnet_io.py"
+        has_pyramid=1
         ;;
     vgg*)
         sidecar="test/parity/dump_vgg_io.py"
@@ -127,6 +138,21 @@ else
         dump_args+=(--in-chans "$in_chans")
     fi
     uv run python "$sidecar" "${dump_args[@]}"
+fi
+
+# The features_only fixture has no in_chans variants: the pyramid parity test
+# only exercises the 3-channel path.
+if [[ "$has_pyramid" -eq 1 && "$in_chans" -eq 3 ]]; then
+    fo_fixture="data/parity/${variant}_featsonly_io.h5"
+    if [[ -f "$fo_fixture" && "$force" -ne 1 ]]; then
+        echo "[test_variant] fixture $fo_fixture exists; reusing"
+    else
+        # The sidecar skips any fixture that already exists, so --force has to
+        # remove it first or the re-dump is a silent no-op.
+        [[ "$force" -eq 1 ]] && rm -f "$fo_fixture"
+        echo "[test_variant] dumping $fo_fixture via $featsonly_sidecar"
+        uv run python "$featsonly_sidecar" --variant "$variant"
+    fi
 fi
 
 echo "[test_variant] running Julia test for $variant"

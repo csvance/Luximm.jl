@@ -11,6 +11,8 @@
 
 isdefined(@__MODULE__, :LOGITS_ATOL) || include("_parity_tol.jl")
 
+using HDF5: HDF5
+
 parity_fixture_path(variant::Symbol; in_chans::Int = 3) = begin
     suffix = in_chans == 3 ? "" : "_in$(in_chans)c"
     base = get(ENV, "JIMM_PARITY_DIR", joinpath(@__DIR__, "..", "data", "parity"))
@@ -27,6 +29,88 @@ function load_parity_fixture(variant::Symbol; in_chans::Int = 3)
 end
 
 hf_offline() = get(ENV, "HF_OFFLINE", "") == "1"
+
+# -- features_only / feature-pyramid parity -------------------------------
+
+featsonly_fixture_path(variant::Symbol) = begin
+    base = get(ENV, "JIMM_PARITY_DIR", joinpath(@__DIR__, "..", "data", "parity"))
+    joinpath(base, "$(variant)_featsonly_io.h5")
+end
+
+# Fixtures come from test/parity/dump_features_only_io.py, which writes the
+# usual /input + /output/feat_NN groups plus timm's own tap table under
+# /feature_channels and /feature_reductions.
+function load_featsonly_fixture(variant::Symbol)
+    path = featsonly_fixture_path(variant)
+    isfile(path) || return nothing
+    parity = Luximm.Interop.read_parity(path)
+    channels, reductions = HDF5.h5open(path, "r") do f
+        (Int.(read(f["feature_channels"])), Int.(read(f["feature_reductions"])))
+    end
+    expected = [parity.output[k] for k in sort(collect(keys(parity.output)))]
+    return (; input = parity.input, expected = expected, channels, reductions)
+end
+
+# Parity for `features_only = true`: every tap must match timm's
+# corresponding `features_only=True` output, and the declared tap table must
+# match timm's `feature_info`. Skips when the fixture is missing, like the
+# other parity paths.
+#
+# Also asserts the invariant the whole design rests on: an `out_indices`
+# subset shares the parameter tree with the full pyramid, so the *same*
+# loaded `(ps, st)` drives both and returns the very same tensors.
+function run_variant_feature_pyramid_parity(variant::Symbol)
+    fixture = load_featsonly_fixture(variant)
+    if fixture === nothing
+        @info "skipping $(variant) feature pyramid: fixture missing at " *
+              featsonly_fixture_path(variant)
+        return nothing
+    end
+
+    @testset "features_only" begin
+        info = feature_info(variant)
+        @test collect(info.channels) == fixture.channels
+        @test collect(info.reductions) == fixture.reductions
+        @test length(info) == length(fixture.expected)
+
+        model, load = create_pretrained(variant; features_only = true)
+        ps, st = Lux.setup(Xoshiro(0), model)
+        st = Lux.testmode(st)
+        ps, st = load(ps, st)
+        feats, _ = model(fixture.input, ps, st)
+
+        @test feats isa Tuple
+        @test length(feats) == length(fixture.expected)
+        for i in eachindex(fixture.expected)
+            expected = fixture.expected[i]
+            @test size(feats[i]) == size(expected)
+            diff = maximum(abs.(feats[i] .- expected))
+            ref_scale = max(maximum(abs.(expected)), eps(Float32))
+            rel = diff / ref_scale
+            @info "$(variant) tap $i ($(info.names[i]), reduction " *
+                  "$(info.reductions[i])) max-abs-diff = $diff, rel = $rel"
+            @test rel < FEATURES_RTOL
+        end
+
+        # Dropping the finest tap must not disturb the tree or the tensors.
+        sub_indices = Tuple(2:length(info))
+        sub_model = create_model(
+            variant;
+            features_only = true,
+            num_classes = 0,
+            out_indices = sub_indices,
+        )
+        sub_feats, _ = sub_model(fixture.input, ps, st)
+        @test length(sub_feats) == length(sub_indices)
+        @test all(sub_feats[i] == feats[sub_indices[i]] for i in eachindex(sub_indices))
+
+        sub_info = feature_info(variant; out_indices = sub_indices)
+        @test sub_info.indices == sub_indices
+        @test sub_info.channels == map(i -> info.channels[i], sub_indices)
+        @test sub_info.reductions == map(i -> info.reductions[i], sub_indices)
+    end
+    return nothing
+end
 
 # Runs the three parity sub-tests for one variant: forward_features,
 # forward (logits) when the fixture ships them, and forward_features at
