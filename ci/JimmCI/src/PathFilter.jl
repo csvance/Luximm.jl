@@ -8,6 +8,7 @@ const _SHARED_PREFIXES =
 const _SHARED_EXACT = Set([
     "src/Luximm.jl",
     "src/Models/Models.jl",
+    "src/Models/FeatureInfo.jl",
     "Project.toml",
     "Manifest.toml",
     "test/runtests.jl",

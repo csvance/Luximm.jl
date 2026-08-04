@@ -102,6 +102,17 @@ function _scaffold_testset()
         @test isdefined(Luximm.Models, :create_pretrained)
         @test isdefined(Luximm.Models, :default_num_classes)
         @test isdefined(Luximm.Models, :_load_pretrained)
+        # Feature-pyramid interface (features_only / feature_info).
+        @test isdefined(Luximm.Models, :FeatureInfo)
+        @test isdefined(Luximm.Models, :feature_info)
+        @test isdefined(Luximm.Models, :select_features)
+        @test isdefined(Luximm.Models, :resolve_out_indices)
+        @test isdefined(Luximm.Models, :feature_selector)
+        @test isdefined(Luximm.Models, :resnet_feature_info)
+        @test isdefined(Luximm.Models, :seresnet_feature_info)
+        @test isdefined(Luximm.Models, :bit_resnetv2_feature_info)
+        @test isdefined(Luximm.Models, :convnext_feature_info)
+        @test isdefined(Luximm.Models, :convnextv2_feature_info)
     end
 end
 

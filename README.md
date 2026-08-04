@@ -98,6 +98,55 @@ logits, _ = model(x, ps, st)                               # (10, 1)
 For multi-backbone composition and deeper nesting patterns, see the
 [Getting Started][docs-getting-started] docs page.
 
+## Feature pyramids for dense prediction
+
+`features_only = true` mirrors timm's `features_only=True`: the forward
+returns a tuple of intermediate feature maps ordered by increasing
+reduction, which is what a UNet or FPN decoder consumes. `feature_info`
+is the tap table, so the decoder can be sized before it is built.
+
+```julia
+using Luximm, Lux, Random
+
+info = feature_info(:resnet18_a1_in1k)
+info.reductions                            # (2, 4, 8, 16, 32)
+info.channels                              # (64, 64, 128, 256, 512)
+
+model, load = create_pretrained(:resnet18_a1_in1k; features_only = true)
+ps, st = Lux.setup(Xoshiro(0), model)
+ps, st = load(ps, st)
+st = Lux.testmode(st)
+
+x = randn(Float32, 224, 224, 3, 1)
+feats, _ = model(x, ps, st)                # 5-tuple, finest first
+size(feats[1]), size(feats[end])           # (112,112,64,1), (7,7,512,1)
+```
+
+`out_indices` selects a subset of the taps (1-based and strictly
+increasing, so timm's `out_indices=(1,2,3,4)` is Luximm's `(2,3,4,5)`).
+A features-only model builds the same parameter tree as the plain
+`num_classes = 0` extractor, so the released weights load into it
+unchanged.
+
+| Family        | Pyramid | Reductions       |
+|---------------|---------|------------------|
+| ResNet        | ✅       | 2, 4, 8, 16, 32  |
+| SE-ResNet     | ✅       | 2, 4, 8, 16, 32  |
+| BiT ResNetV2  | ✅       | 2, 4, 8, 16, 32  |
+| ConvNeXt      | ✅       | 4, 8, 16, 32     |
+| ConvNeXt V2   | ✅       | 4, 8, 16, 32     |
+| VGG           | ❌       | n/a              |
+| ViT           | ❌       | n/a              |
+| CoAtNet       | ❌       | n/a              |
+
+The unsupported families raise an error explaining why. Two caveats are
+worth knowing, both matching timm: the ConvNeXt families have no
+reduction-2 tap (their patch stem strides by 4 in one convolution), and
+BiT's reduction-32 tap is the raw pre-activation `stage4` output rather
+than the `final_norm`-applied map the same model returns at
+`num_classes = 0`. See the [Getting Started][docs-getting-started] page
+for details.
+
 ## License and attribution
 
 Luximm.jl is licensed under the Apache License, Version 2.0 (see

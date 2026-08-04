@@ -50,7 +50,18 @@ When `num_classes == 0`, the forward returns the full normed token sequence
 The input spatial size must equal the variant's native `img_size`; the
 absolute position embedding has no interpolation path yet.
 """
-function vit(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function vit(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
+    # No pyramid: a plain ViT is single-scale. timm synthesizes one by
+    # reshaping selected block outputs back to a grid, but every level then
+    # sits at the same reduction (the patch size), which is not what a
+    # UNet/FPN decoder wants.
+    _no_feature_pyramid("ViT", variant, features_only, out_indices)
     cfg = get(VIT_VARIANTS, variant) do
         error(
             "Unknown ViT variant: $variant. Known variants: " *

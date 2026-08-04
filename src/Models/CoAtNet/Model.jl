@@ -274,7 +274,17 @@ forward returns `(num_classes, N)`, matching `timm.forward(x)`.
 The input spatial size must equal the variant's native `img_size`; the
 transformer relative-position bias is sized to the per-stage feature map.
 """
-function coatnet(variant::Symbol; in_chans::Int = 3, num_classes::Int = 0)
+function coatnet(
+    variant::Symbol;
+    in_chans::Int = 3,
+    num_classes::Int = 0,
+    features_only::Bool = false,
+    out_indices = nothing,
+)
+    # No pyramid yet. The stage layout would support one, but the
+    # relative-position bias pins the input to the variant's native
+    # `img_size`, which makes CoAtNet a poor dense-prediction encoder.
+    _no_feature_pyramid("CoAtNet", variant, features_only, out_indices)
     cfg = get(COATNET_VARIANTS, variant) do
         error(
             "Unknown CoAtNet variant: $variant. Known variants: " *

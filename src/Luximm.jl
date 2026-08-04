@@ -36,8 +36,10 @@ export BiTVariant,
     VIT_VARIANTS,
     CoAtNetVariant,
     COATNET_VARIANTS,
+    FeatureInfo,
     create_model,
     create_pretrained,
-    default_num_classes
+    default_num_classes,
+    feature_info
 
 end # module Luximm

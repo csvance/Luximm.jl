@@ -31,6 +31,24 @@ create_model
 default_num_classes
 ```
 
+## Feature pyramids
+
+`features_only = true` turns a supported backbone into a multi-scale
+feature extractor whose forward returns a tuple of intermediate maps
+ordered by increasing reduction, which is what a UNet or FPN decoder
+consumes. `feature_info` is the accompanying tap table (reductions and
+channel counts), so a decoder can be sized before it is built. See
+[Getting Started](../getting_started.md#Feature-pyramid-(multi-scale)-mode)
+for the walkthrough.
+
+Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, and
+ConvNeXt V2. VGG, ViT, and CoAtNet raise an error explaining why.
+
+```@docs
+feature_info
+FeatureInfo
+```
+
 ## Per-family namespaces
 
 Each family exports its variant config struct and the
