@@ -102,7 +102,51 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
         )
         sub_feats, _ = sub_model(fixture.input, ps, st)
         @test length(sub_feats) == length(sub_indices)
-        @test all(sub_feats[i] == feats[sub_indices[i]] for i in eachindex(sub_indices))
+        # Bitwise `==` is deliberate: the subset re-runs the identical
+        # arithmetic on the identical input, so the tensors should be equal to
+        # the last bit, not merely close. Describe any mismatch before
+        # asserting, so a failing log says whether it is a last-bit wobble or a
+        # genuinely wrong tap. The assertion itself is on a `Bool` rather than
+        # on `got == ref`, so a failure prints `false` instead of dumping both
+        # feature maps into the log.
+        mismatched = false
+        for i in eachindex(sub_indices)
+            ref = feats[sub_indices[i]]
+            got = sub_feats[i]
+            tap_equal = size(got) == size(ref) && got == ref
+            if size(got) != size(ref)
+                @info "$(variant) subset tap $i: size $(size(got)) != full tap " *
+                      "$(sub_indices[i]) size $(size(ref))"
+            elseif !tap_equal
+                d = maximum(abs.(got .- ref))
+                scale = maximum(abs.(ref))
+                @info "$(variant) subset tap $i (full tap $(sub_indices[i])): " *
+                      "$(count(got .!= ref)) of $(length(ref)) elements differ, " *
+                      "max-abs-diff = $d, ref scale = $scale, " *
+                      "rel = $(d / max(scale, eps(Float32)))"
+            end
+            mismatched |= !tap_equal
+            @test tap_equal
+        end
+
+        # Only when the above already failed, and only once: is the full model
+        # reproducible on this machine at all? If a second identical pass
+        # disagrees with the first, the mismatch is BLAS/thread nondeterminism
+        # rather than anything `out_indices` did.
+        if mismatched
+            rerun, _ = model(fixture.input, ps, st)
+            stable = true
+            for i in eachindex(feats)
+                rerun[i] == feats[i] && continue
+                stable = false
+                @info "$(variant) rerun control tap $i: " *
+                      "$(count(rerun[i] .!= feats[i])) of $(length(feats[i])) " *
+                      "elements differ between two identical full passes, " *
+                      "max-abs-diff = $(maximum(abs.(rerun[i] .- feats[i])))"
+            end
+            stable && @info "$(variant) rerun control: two identical full passes " *
+                  "agree bitwise, so the subset mismatch is not run-to-run noise"
+        end
 
         sub_info = feature_info(variant; out_indices = sub_indices)
         @test sub_info.indices == sub_indices
