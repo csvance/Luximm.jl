@@ -381,14 +381,19 @@ function _ensure_fixtures!(
     sidecar === nothing && return
 
     if !isempty(variant)
-        # Every family's test file has both a 3-channel parity testset and
-        # an `in_chans=1` testset (the latter exercises timm's
-        # `adapt_input_conv` stem path). Dump both fixtures or the in1c
-        # testset silently skips with "fixture missing".
-        for ic in (3, 1)
-            _dump_variant_fixture!(b, job, wt, family, sidecar, variant, ic, on_line, token)
+        # `variant` may be a comma-separated representative list (see
+        # REPRESENTATIVE_VARIANT): every family's test file has both a
+        # 3-channel parity testset and an `in_chans=1` testset (the latter
+        # exercises timm's `adapt_input_conv` stem path). Dump both fixtures
+        # for each listed variant, or the in1c testset silently skips with
+        # "fixture missing".
+        for v in split(variant, ',')
+            isempty(v) && continue
+            for ic in (3, 1)
+                _dump_variant_fixture!(b, job, wt, family, sidecar, v, ic, on_line, token)
+            end
+            _dump_featsonly_fixture!(b, job, wt, family, v, on_line, token)
         end
-        _dump_featsonly_fixture!(b, job, wt, family, variant, on_line, token)
         return
     end
 

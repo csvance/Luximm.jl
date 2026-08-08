@@ -180,7 +180,7 @@ function run_variant_parity(variant::Symbol, fixture)
         ref_scale = max(maximum(abs.(expected_features)), eps(Float32))
         rel = diff / ref_scale
         @info "$(variant) features max-abs-diff = $diff, rel = $rel"
-        @test rel < FEATURES_RTOL
+        @test rel < feature_rtol(variant)
     end
 
     if haskey(fixture.output, "logits")
@@ -216,7 +216,7 @@ function run_variant_parity(variant::Symbol, fixture)
             ref_scale = max(maximum(abs.(expected1)), eps(Float32))
             rel = diff / ref_scale
             @info "$(variant) features (in_chans=1) max-abs-diff = $diff, rel = $rel"
-            @test rel < FEATURES_RTOL
+            @test rel < feature_rtol(variant)
         end
     end
 end

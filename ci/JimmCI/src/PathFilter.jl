@@ -66,7 +66,13 @@ const REPRESENTATIVE_VARIANT = Dict{String,String}(
     "convnextv2" => "convnextv2_atto_fcmae_ft_in1k",
     "vgg" => "vgg16_tv_in1k",
     "seresnet" => "seresnet50_a1_in1k",
-    "vit" => "vit_base_patch16_224_augreg2_in21k_ft_in1k",
+    # Two representatives: the ViT family now spans two architectural flavors —
+    # timm's ImageNet ViTs (`pre_norm = false`, eps 1e-6, biased stem) and the
+    # CLIP image towers (`pre_norm = true`, eps 1e-5, bias-free stem). A single
+    # representative would leave one flavor untested on PR-scope runs; the
+    # builder splits this on commas and dumps/runs both.
+    "vit" => "vit_base_patch16_224_augreg2_in21k_ft_in1k," *
+        "vit_base_patch32_clip_224_openai_ft_in1k",
     "coatnet" => "coatnet_0_rw_224_sw_in1k",
 )
 

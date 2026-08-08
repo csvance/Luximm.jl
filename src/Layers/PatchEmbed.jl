@@ -24,14 +24,14 @@ PyTorch keys `<prefix>.proj.weight` / `<prefix>.proj.bias` map to the `:proj`
 Conv leaves (`identity`, or `adapt_input_conv` for the weight when
 `in_chans != 3`).
 """
-function patch_embed(in_chans::Int, embed_dim::Int; patch::Int = 16)
+function patch_embed(in_chans::Int, embed_dim::Int; patch::Int = 16, use_bias::Bool = true)
     @compact(
         proj = Conv(
             (patch, patch),
             in_chans => embed_dim;
             stride = patch,
             pad = 0,
-            use_bias = true,
+            use_bias = use_bias,
             cross_correlation = true,
             init_bias = zeros32,
         ),

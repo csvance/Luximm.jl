@@ -35,7 +35,7 @@ input shapes). File issues and PRs.
 | [ConvNeXt (DINOv3)][dinov3] | [`:convnext_*`][prefix-convnext]     | 4       | [DINOv3 License][license-dinov3]   | ⚠️             |
 | [ConvNeXt V2][convnextv2]   | [`:convnextv2_*`][prefix-convnextv2] | 26      | [CC BY-NC 4.0][license-convnextv2] | ❌              |
 | [VGG][vgg]                  | [`:vgg*`][prefix-vgg]                | 8       | [CC BY 4.0][license-ccby4]         | ✅              |
-| [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 1       | [Apache 2.0][license-apache2]      | ✅              |
+| [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 4       | [Apache 2.0][license-apache2]      | ✅              |
 | [CoAtNet][coatnet]          | [`:coatnet_*`][prefix-coatnet]       | 5       | [Apache 2.0][license-apache2]      | ✅              |
 
 ## Basic usage

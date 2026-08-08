@@ -61,4 +61,15 @@ using JimmCI.PathFilter
             @test haskey(REPRESENTATIVE_VARIANT, f)
         end
     end
+
+    @testset "ViT representative covers both architectural flavors" begin
+        # The ViT family spans timm ImageNet ViTs (`pre_norm=false`) and CLIP
+        # towers (`pre_norm=true`, bias-free stem). A PR-scope run only tests
+        # the representative(s); if a future edit collapses this back to one
+        # variant, one flavor silently loses PR-scope coverage and only a
+        # `jimm-ci --master` sweep would catch a regression.
+        reps = split(REPRESENTATIVE_VARIANT["vit"], ',')
+        @test "vit_base_patch16_224_augreg2_in21k_ft_in1k" in reps
+        @test "vit_base_patch32_clip_224_openai_ft_in1k" in reps
+    end
 end
