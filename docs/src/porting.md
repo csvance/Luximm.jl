@@ -11,8 +11,7 @@ weights; the rest is mechanics.
 If you are using Claude Code to drive the port, the same workflow is
 encoded as an agent-facing skill at
 `skills/timm-to-lux/SKILL.md` and loads automatically inside
-this repo. The skill assumes the Kaimon REPL workflow described in
-`.claude/skills/kaimon-julia/SKILL.md`. This page covers the same
+this repo. This page covers the same
 ground for human contributors without those tools.
 
 ## Acceptance criteria
