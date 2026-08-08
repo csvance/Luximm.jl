@@ -13,7 +13,7 @@ homage to the project we port from.
 ## Status
 
 Most of Luximm was written by AI agents driving the porting workflow
-encoded in `.claude/skills/timm-to-lux/`, with human review at each
+encoded in `skills/timm-to-lux/`, with human review at each
 phase and the parity tests as the correctness backstop. The code is
 already being used in real projects, so the registered backbones work
 for forward inference with the released weights. That said: **expect

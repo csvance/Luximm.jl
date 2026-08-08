@@ -16,13 +16,28 @@ in `.safetensors` format. The name is an homage to the project we port from.
 ## Status
 
 Most of Luximm was written by AI agents driving the porting workflow
-encoded in `.claude/skills/timm-to-lux/`, with human review at each
-phase and the parity tests as the correctness backstop. The code is
-already being used in real projects, so the registered backbones work
-for forward inference with the released weights. That said: **expect
-bugs and rough edges**, especially around anything the parity tests do
-not exercise (custom training loops, mixed-precision paths, exotic
-input shapes). File issues and PRs.
+encoded in [`skills/timm-to-lux/`](skills/timm-to-lux/), with human
+review at each phase and the parity tests as the correctness backstop.
+The code is already being used in real projects, so the registered
+backbones work for forward inference with the released weights. That
+said: **expect bugs and rough edges**, especially around anything the
+parity tests do not exercise (custom training loops, mixed-precision
+paths, exotic input shapes). File issues and PRs.
+
+## For LLMs & Agents
+
+This library ships agent skills. In Claude Code:
+
+```
+/plugin marketplace add csvance/Luximm.jl
+/plugin install luximm
+```
+
+That installs `timm-to-lux`, the porting workflow behind this library
+(converting PyTorch `timm` models into numerically-equivalent Lux.jl
+implementations with parity-tested weight loading), and
+`tachikoma-tui`, a bootstrap guide for Tachikoma.jl TUI apps. Both live
+in [`skills/`](skills) as plain Markdown.
 
 ## Available backbones
 
