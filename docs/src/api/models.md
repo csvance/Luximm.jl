@@ -41,8 +41,11 @@ channel counts), so a decoder can be sized before it is built. See
 [Getting Started](../getting_started.md#Feature-pyramid-(multi-scale)-mode)
 for the walkthrough.
 
-Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, and
-ConvNeXt V2. VGG, ViT, and CoAtNet raise an error explaining why.
+Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2,
+and ViT. VGG and CoAtNet raise an error explaining why. A ViT is
+single-scale (every tap at the patch-size reduction, one per block), so a
+decoder that needs multiple resolutions must upsample past the taps it
+selects.
 
 ```@docs
 feature_info

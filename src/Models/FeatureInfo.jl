@@ -161,7 +161,7 @@ function _no_feature_pyramid(
     features_only && error(
         "$family has no feature-pyramid support yet, so `features_only = true` " *
         "is not available for $variant. Families with a pyramid: ResNet, " *
-        "SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2.",
+        "SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, ViT.",
     )
     _check_out_indices_unused(variant, out_indices)
     return nothing

@@ -26,10 +26,10 @@ const _FAMILY_SIDECAR = Dict{String,String}(
 
 # Sidecar for the `features_only` (feature-pyramid) fixtures, which are a
 # second fixture per variant named `<variant>_featsonly_io.h5` rather than a
-# per-family script. Only the five families with a pyramid have them; the
+# per-family script. Only the six families with a pyramid have them; the
 # sidecar itself no-ops on a variant from any other family.
 const _FEATSONLY_SIDECAR = "test/parity/dump_features_only_io.py"
-const _FEATSONLY_FAMILIES = Set(["resnet", "seresnet", "bit", "convnext", "convnextv2"])
+const _FEATSONLY_FAMILIES = Set(["resnet", "seresnet", "bit", "convnext", "convnextv2", "vit"])
 
 struct Builder
     cfg::Config

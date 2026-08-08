@@ -73,7 +73,7 @@ cd "$repo_root"
 # Family resolution mirrors test/_filter.jl::_jimm_variant_family. Order
 # matters here: convnextv2_* must come before convnext_*, because both
 # patterns share the "convnext" prefix.
-# `has_pyramid` gates the second fixture: the five families with a feature
+# `has_pyramid` gates the second fixture: the six families with a feature
 # pyramid also need `<variant>_featsonly_io.h5`, dumped by a shared sidecar.
 # Without it the pyramid testset silently skips on "fixture missing".
 has_pyramid=0
@@ -103,6 +103,7 @@ case "$variant" in
         ;;
     vit*)
         sidecar="test/parity/dump_vit_io.py"
+        has_pyramid=1
         ;;
     coatnet*)
         sidecar="test/parity/dump_coatnet_io.py"

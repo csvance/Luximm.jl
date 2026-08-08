@@ -143,24 +143,29 @@ A features-only model builds the same parameter tree as the plain
 `num_classes = 0` extractor, so the released weights load into it
 unchanged.
 
-| Family        | Pyramid | Reductions       |
-|---------------|---------|------------------|
-| ResNet        | ✅       | 2, 4, 8, 16, 32  |
-| SE-ResNet     | ✅       | 2, 4, 8, 16, 32  |
-| BiT ResNetV2  | ✅       | 2, 4, 8, 16, 32  |
-| ConvNeXt      | ✅       | 4, 8, 16, 32     |
-| ConvNeXt V2   | ✅       | 4, 8, 16, 32     |
-| VGG           | ❌       | n/a              |
-| ViT           | ❌       | n/a              |
-| CoAtNet       | ❌       | n/a              |
+| Family        | Pyramid | Reductions          |
+|---------------|---------|---------------------|
+| ResNet        | ✅       | 2, 4, 8, 16, 32     |
+| SE-ResNet     | ✅       | 2, 4, 8, 16, 32     |
+| BiT ResNetV2  | ✅       | 2, 4, 8, 16, 32     |
+| ConvNeXt      | ✅       | 4, 8, 16, 32        |
+| ConvNeXt V2   | ✅       | 4, 8, 16, 32        |
+| ViT           | ✅       | patch (per block)   |
+| VGG           | ❌       | n/a                 |
+| CoAtNet       | ❌       | n/a                 |
 
-The unsupported families raise an error explaining why. Two caveats are
-worth knowing, both matching timm: the ConvNeXt families have no
-reduction-2 tap (their patch stem strides by 4 in one convolution), and
-BiT's reduction-32 tap is the raw pre-activation `stage4` output rather
-than the `final_norm`-applied map the same model returns at
-`num_classes = 0`. See the [Getting Started][docs-getting-started] page
-for details.
+The unsupported families raise an error explaining why. Three caveats are
+worth knowing, all matching timm: the ConvNeXt families have no reduction-2
+tap (their patch stem strides by 4 in one convolution); BiT's reduction-32
+tap is the raw pre-activation `stage4` output rather than the
+`final_norm`-applied map the same model returns at `num_classes = 0`; and a
+ViT is single-scale — every tap sits at the patch-size reduction, one per
+encoder block, each the raw post-block output with the class token dropped
+and the patch tokens reshaped to a grid (timm applies no final LayerNorm to
+its intermediates either). timm's `vit_*` default `out_indices = 3` (the
+last three blocks) is Luximm's `out_indices = (depth-2, depth-1, depth)`;
+pass `nothing` to get every block. See the [Getting Started][docs-getting-started]
+page for details.
 
 ## License and attribution
 
