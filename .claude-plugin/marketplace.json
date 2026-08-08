@@ -1,0 +1,28 @@
+{
+  "name": "luximm",
+  "owner": {
+    "name": "csvance",
+    "url": "https://github.com/csvance/Luximm.jl"
+  },
+  "metadata": {
+    "description": "Agent skills for Luximm.jl, Julia ports of timm backbones for Lux.jl.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "luximm",
+      "source": "./",
+      "description": "Skills for porting PyTorch timm models to Lux.jl with numeric parity, and for building Tachikoma.jl TUI apps.",
+      "version": "1.0.0",
+      "category": "development",
+      "keywords": [
+        "julia",
+        "lux",
+        "deep-learning",
+        "timm",
+        "pytorch",
+        "tui"
+      ]
+    }
+  ]
+}

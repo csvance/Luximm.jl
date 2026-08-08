@@ -4,6 +4,20 @@
 # canonical ViT-B/16 with a class token, learned absolute position embedding,
 # and a plain (GELU) MLP FFN. This is the architectural foundation a wide range
 # of checkpoints (DeiT, CLIP, SigLIP, MAE, DINOv2) extend.
+#
+# CLIP image towers (`vit_*_clip_*`, OpenAI / LAION) are the same
+# `VisionTransformer` with three twists, all encoded in `ViTVariant` fields:
+#   - `pre_norm = true`: a `norm_pre` LayerNorm runs on the token sequence
+#     right after `pos_embed`, before the encoder blocks (timm `pre_norm=True`,
+#     which mirrors OpenAI's `ln_pre`). timm's non-CLIP ViTs set this to
+#     `nn.Identity()`, so the forward is identical — one captured layer, no
+#     branching.
+#   - `norm_eps = 1f-5`: CLIP towers normalize with `LayerNorm(eps=1e-5)`,
+#     while timm's ImageNet ViTs use `eps=1e-6`. The eps is a per-variant
+#     constant so the two families share one constructor.
+#   - `stem_bias = false`: the CLIP patch-embed conv is bias-free, so the
+#     state dict has no `patch_embed.proj.bias` and the mapping must not
+#     reference one.
 
 """
     ViTVariant
@@ -22,6 +36,12 @@ Fields:
 - `hf_repo`: HuggingFace repo containing `model.safetensors`.
 - `default_num_classes`: head dimension the released weights ship with.
 - `default_input_size`: native training resolution (== `img_size`).
+- `pre_norm`: whether a `norm_pre` LayerNorm runs after `pos_embed` and
+  before the encoder blocks (CLIP image towers; timm `pre_norm=True`).
+- `norm_eps`: LayerNorm epsilon for every norm in the model — `1f-6` for
+  timm's ImageNet ViTs, `1f-5` for the CLIP towers.
+- `stem_bias`: whether the patch-embed conv has a bias (true for timm's
+  ImageNet ViTs; false for CLIP, whose `patch_embed.proj` is bias-free).
 """
 struct ViTVariant
     name::Symbol
@@ -33,6 +53,9 @@ struct ViTVariant
     hf_repo::String
     default_num_classes::Int
     default_input_size::Int
+    pre_norm::Bool
+    norm_eps::Float32
+    stem_bias::Bool
 end
 
 """
@@ -60,5 +83,52 @@ const VIT_VARIANTS = Dict{Symbol,ViTVariant}(
         "timm/vit_base_patch16_224.augreg2_in21k_ft_in1k",
         1000,
         224,
+        false,
+        1.0f-6,
+        true,
+    ),
+    # CLIP image towers fine-tuned on ImageNet (timm `vit_*_clip_*`, OpenAI).
+    # All are `pre_norm`, eps 1e-5, bias-free stem, 1000-class head.
+    :vit_base_patch32_clip_224_openai_ft_in1k => ViTVariant(
+        :vit_base_patch32_clip_224_openai_ft_in1k,
+        12,
+        768,
+        12,
+        32,
+        224,
+        "timm/vit_base_patch32_clip_224.openai_ft_in1k",
+        1000,
+        224,
+        true,
+        1.0f-5,
+        false,
+    ),
+    :vit_base_patch16_clip_224_openai_ft_in1k => ViTVariant(
+        :vit_base_patch16_clip_224_openai_ft_in1k,
+        12,
+        768,
+        12,
+        16,
+        224,
+        "timm/vit_base_patch16_clip_224.openai_ft_in1k",
+        1000,
+        224,
+        true,
+        1.0f-5,
+        false,
+    ),
+    :vit_large_patch14_clip_224_openai_ft_in1k => ViTVariant(
+        :vit_large_patch14_clip_224_openai_ft_in1k,
+        24,
+        1024,
+        16,
+        14,
+        224,
+        "timm/vit_large_patch14_clip_224.openai_ft_in1k",
+        1000,
+        224,
+        true,
+        1.0f-5,
+        false,
     ),
 )

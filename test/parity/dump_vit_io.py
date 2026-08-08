@@ -30,6 +30,12 @@ from _dump_common import dump
 VIT_VARIANTS_FULL: Mapping[str, str] = {
     "vit_base_patch16_224_augreg2_in21k_ft_in1k":
         "vit_base_patch16_224.augreg2_in21k_ft_in1k",
+    "vit_base_patch32_clip_224_openai_ft_in1k":
+        "vit_base_patch32_clip_224.openai_ft_in1k",
+    "vit_base_patch16_clip_224_openai_ft_in1k":
+        "vit_base_patch16_clip_224.openai_ft_in1k",
+    "vit_large_patch14_clip_224_openai_ft_in1k":
+        "vit_large_patch14_clip_224.openai_ft_in1k",
 }
 
 

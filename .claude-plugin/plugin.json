@@ -1,0 +1,19 @@
+{
+  "name": "luximm",
+  "description": "Skills for porting PyTorch `timm` models to numerically-equivalent Lux.jl implementations, and for building Tachikoma.jl TUI apps.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Carroll Vance"
+  },
+  "homepage": "https://csvance.github.io/Luximm.jl",
+  "repository": "https://github.com/csvance/Luximm.jl",
+  "license": "Apache-2.0",
+  "keywords": [
+    "julia",
+    "lux",
+    "deep-learning",
+    "timm",
+    "pytorch",
+    "tui"
+  ]
+}

@@ -3,11 +3,15 @@
 # Architecture (matches timm `VisionTransformer` with class token, learned
 # absolute pos-embed, plain GELU MLP, `global_pool='token'`, no `fc_norm` /
 # `pre_logits`):
-#   - `patch_embed`: stride-16 conv → token tensor `(embed_dim, T_patch, N)`.
+#   - `patch_embed`: stride-`patch` conv → token tensor `(embed_dim, T_patch, N)`.
 #   - prepend `cls_token`, add `pos_embed` (both captured params).
+#   - optional `norm_pre`: for CLIP towers (`pre_norm = true` in the variant
+#     config), a LayerNorm over the token sequence right after `pos_embed` and
+#     before `blocks` (timm `norm_pre`, mirroring OpenAI's `ln_pre`). Non-CLIP
+#     variants capture `identity` here, so the forward is uniform.
 #   - `blocks`: `depth` pre-norm transformer encoder blocks (Chain).
-#   - final `norm` (LayerNorm over channel axis, eps 1e-6) over the full token
-#     sequence.
+#   - final `norm` (LayerNorm over channel axis; eps per-variant: 1e-6 for
+#     timm ImageNet ViTs, 1e-5 for CLIP) over the full token sequence.
 #
 # `num_classes == 0` returns the full normed sequence `(embed_dim, T, N)` —
 # exactly timm `forward_features` (not pooled). `num_classes > 0` takes the
@@ -25,13 +29,16 @@ include("Config.jl")
 
 # Shared backbone forward, called from both branches so the feature-extractor
 # and classifier paths cannot desync. Returns the full normed token sequence.
-function _vit_features(x, patch, cls_token, pos_embed, blocks, norm)
+# `norm_pre` is `identity` for non-CLIP variants, so the norm_pre call is a
+# no-op there — one code path for both.
+function _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
     x = patch(x)                          # (D, T_patch, N)
     D = size(x, 1)
     N = size(x, 3)
     cls = repeat(cls_token, 1, 1, N)      # (D, 1, N)
     x = cat(cls, x; dims = 2)             # (D, T, N), class token first
     x = x .+ pos_embed                    # pos_embed (D, T, 1) broadcasts over N
+    x = norm_pre(x)                       # CLIP towers only; identity otherwise
     x = blocks(x)
     return norm(x)
 end
@@ -71,34 +78,40 @@ function vit(
     D = cfg.embed_dim
     T = vit_num_tokens(cfg)
     img = cfg.img_size
+    eps = cfg.norm_eps
+    # timm uses `nn.Identity()` when `pre_norm=False`, so a captured `identity`
+    # keeps one forward for both CLIP and ImageNet variants.
+    norm_pre = cfg.pre_norm ? vit_layernorm(D; eps = eps) : identity
 
     if num_classes == 0
         @compact(
-            patch = patch_embed(in_chans, D; patch = cfg.patch),
+            patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
             cls_token = zeros32(D, 1, 1),
             pos_embed = zeros32(D, T, 1),
-            blocks = Chain([vit_block(D; num_heads = cfg.num_heads) for _ = 1:cfg.depth]...),
-            norm = vit_layernorm(D),
+            norm_pre = norm_pre,
+            blocks = Chain([vit_block(D; num_heads = cfg.num_heads, eps = eps) for _ = 1:cfg.depth]...),
+            norm = vit_layernorm(D; eps = eps),
         ) do x
             @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
                 "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
                 "Pos-embed interpolation is not implemented."
-            @return _vit_features(x, patch, cls_token, pos_embed, blocks, norm)
+            @return _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
         end
     else
         nc = num_classes
         @compact(
-            patch = patch_embed(in_chans, D; patch = cfg.patch),
+            patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
             cls_token = zeros32(D, 1, 1),
             pos_embed = zeros32(D, T, 1),
-            blocks = Chain([vit_block(D; num_heads = cfg.num_heads) for _ = 1:cfg.depth]...),
-            norm = vit_layernorm(D),
+            norm_pre = norm_pre,
+            blocks = Chain([vit_block(D; num_heads = cfg.num_heads, eps = eps) for _ = 1:cfg.depth]...),
+            norm = vit_layernorm(D; eps = eps),
             head = Dense(D => nc; init_bias = zeros32),
         ) do x
             @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
                 "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
                 "Pos-embed interpolation is not implemented."
-            x = _vit_features(x, patch, cls_token, pos_embed, blocks, norm)
+            x = _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
             cls = reshape(x[:, 1:1, :], size(x, 1), size(x, 3))   # (D, N)
             @return head(cls)
         end
@@ -146,10 +159,20 @@ function vit_mapping(
         mapping,
         ("patch_embed.proj.weight", (prefix..., :patch, :proj, :weight), stem_w_transform),
     )
-    push!(
-        mapping,
-        ("patch_embed.proj.bias", (prefix..., :patch, :proj, :bias), identity),
-    )
+    # CLIP towers have a bias-free stem conv, so their state dict has no
+    # `patch_embed.proj.bias`; only reference it when the variant has one.
+    if cfg.stem_bias
+        push!(
+            mapping,
+            ("patch_embed.proj.bias", (prefix..., :patch, :proj, :bias), identity),
+        )
+    end
+    # Same for `norm_pre`: only CLIP variants (`pre_norm = true`) ship the
+    # pre-encoder LayerNorm parameters.
+    if cfg.pre_norm
+        push!(mapping, ("norm_pre.weight", (prefix..., :norm_pre, :scale), as_token_norm))
+        push!(mapping, ("norm_pre.bias", (prefix..., :norm_pre, :bias), as_token_norm))
+    end
 
     for n = 1:cfg.depth
         blk = (prefix..., :blocks, Symbol("layer_", n))

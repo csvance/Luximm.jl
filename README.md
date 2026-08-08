@@ -16,13 +16,28 @@ in `.safetensors` format. The name is an homage to the project we port from.
 ## Status
 
 Most of Luximm was written by AI agents driving the porting workflow
-encoded in `.claude/skills/timm-to-lux/`, with human review at each
-phase and the parity tests as the correctness backstop. The code is
-already being used in real projects, so the registered backbones work
-for forward inference with the released weights. That said: **expect
-bugs and rough edges**, especially around anything the parity tests do
-not exercise (custom training loops, mixed-precision paths, exotic
-input shapes). File issues and PRs.
+encoded in [`skills/timm-to-lux/`](skills/timm-to-lux/), with human
+review at each phase and the parity tests as the correctness backstop.
+The code is already being used in real projects, so the registered
+backbones work for forward inference with the released weights. That
+said: **expect bugs and rough edges**, especially around anything the
+parity tests do not exercise (custom training loops, mixed-precision
+paths, exotic input shapes). File issues and PRs.
+
+## For LLMs & Agents
+
+This library ships agent skills. In Claude Code:
+
+```
+/plugin marketplace add csvance/Luximm.jl
+/plugin install luximm
+```
+
+That installs `timm-to-lux`, the porting workflow behind this library
+(converting PyTorch `timm` models into numerically-equivalent Lux.jl
+implementations with parity-tested weight loading), and
+`tachikoma-tui`, a bootstrap guide for Tachikoma.jl TUI apps. Both live
+in [`skills/`](skills) as plain Markdown.
 
 ## Available backbones
 
@@ -35,7 +50,7 @@ input shapes). File issues and PRs.
 | [ConvNeXt (DINOv3)][dinov3] | [`:convnext_*`][prefix-convnext]     | 4       | [DINOv3 License][license-dinov3]   | ⚠️             |
 | [ConvNeXt V2][convnextv2]   | [`:convnextv2_*`][prefix-convnextv2] | 26      | [CC BY-NC 4.0][license-convnextv2] | ❌              |
 | [VGG][vgg]                  | [`:vgg*`][prefix-vgg]                | 8       | [CC BY 4.0][license-ccby4]         | ✅              |
-| [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 1       | [Apache 2.0][license-apache2]      | ✅              |
+| [ViT][vit]                  | [`:vit_*`][prefix-vit]               | 4       | [Apache 2.0][license-apache2]      | ✅              |
 | [CoAtNet][coatnet]          | [`:coatnet_*`][prefix-coatnet]       | 5       | [Apache 2.0][license-apache2]      | ✅              |
 
 ## Basic usage

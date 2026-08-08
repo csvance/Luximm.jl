@@ -1,11 +1,11 @@
 ---
 name: timm-to-lux
-description: Workflow guide for porting a PyTorch `timm` model to a numerically-equivalent Lux.jl implementation. Load this skill whenever the task involves porting, converting, or translating a PyTorch model (especially anything from `timm.create_model`, `forward_features`, ResNet/ViT/EfficientNet/ConvNeXt/etc. backbones) to Lux; writing or editing Lux `@compact` blocks that must match a PyTorch reference; producing or consuming HDF5 parity fixtures, `read_parity`, `apply_state_dict`, or `@test isapprox` parity tests; loading `.safetensors` weights from HuggingFace Hub in a Julia context; or reasoning about PyTorch-vs-Lux numeric differences (cross-correlation vs convolution, padding semantics, GroupNorm/BatchNorm defaults, weight standardization, NCHW vs WHCN). This skill layers on top of `kaimon-julia`, which remains the source of truth for driving the Julia REPL.
+description: Workflow guide for porting a PyTorch `timm` model to a numerically-equivalent Lux.jl implementation. Load this skill whenever the task involves porting, converting, or translating a PyTorch model (especially anything from `timm.create_model`, `forward_features`, ResNet/ViT/EfficientNet/ConvNeXt/etc. backbones) to Lux; writing or editing Lux `@compact` blocks that must match a PyTorch reference; producing or consuming HDF5 parity fixtures, `read_parity`, `apply_state_dict`, or `@test isapprox` parity tests; loading `.safetensors` weights from HuggingFace Hub in a Julia context; or reasoning about PyTorch-vs-Lux numeric differences (cross-correlation vs convolution, padding semantics, GroupNorm/BatchNorm defaults, weight standardization, NCHW vs WHCN).
 ---
 
 # Porting `timm` models to Lux.jl
 
-A reference for converting a PyTorch `timm` backbone, layer, or building block into a numerically-equivalent Lux.jl implementation that loads pretrained weights from HuggingFace. Read `kaimon-julia` first; this skill assumes the REPL workflow it describes.
+A reference for converting a PyTorch `timm` backbone, layer, or building block into a numerically-equivalent Lux.jl implementation that loads pretrained weights from HuggingFace.
 
 The repository at `campfire/lib/MMILux.jl` contains a worked, parity-verified port (`BiTResNet.jl`) plus the supporting utilities (`Parity.jl`, the `test/parity/` Python sidecars). Use it as the canonical pattern. Do not re-implement what is already there.
 
@@ -246,7 +246,7 @@ Divergence-pattern playbook:
 
 ## 8. Phase 7: iterate via Kaimon + Revise
 
-Stand up one `start_session()`-attached REPL the way `kaimon-julia` describes, then keep it alive across the whole port. Edit `.jl` files; Revise picks up function-body changes between `ex` calls. Re-run the parity test via `ex(e="include(\"test/test_<model>.jl\")", ses=<key>)`. Restart only when:
+Stand up one `start_session()`-attached REPL and keep it alive across the whole port. Edit `.jl` files; Revise picks up function-body changes between `ex` calls. Re-run the parity test via `ex(e="include(\"test/test_<model>.jl\")", ses=<key>)`. Restart only when:
 
 - You added or removed a struct field, including `@compact` layer fields.
 - You added or removed an `include`.
@@ -271,4 +271,3 @@ A running checklist; every item below has cost real time on a previous port.
 - **`pretrained` URLs go stale.** Pin them next to a comment giving the `timm` canonical name. Public timm weights live at `https://huggingface.co/timm/<name>/resolve/main/model.safetensors`.
 - **Don't generalize until one variant works.** Adding `:resnet101` to the dispatcher before `:resnet50` passes parity creates code paths that the first failed test cannot localize.
 
-Read `kaimon-julia` first; this skill layers on top of that workflow.
