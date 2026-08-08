@@ -178,9 +178,18 @@ Two things to know about the tap tables:
   model at `num_classes = 0` *does* apply it, so those two outputs
   differ. The parameters are still there in `ps.final_norm` if you want
   the normalized map.
+- A ViT is **single-scale**: it has no pyramid. Its taps are one per
+  encoder block, all at the patch-size reduction, each the raw
+  post-block output with the class token dropped and the patch tokens
+  reshaped to a grid — exactly timm's `features_only=True` for `vit_*`
+  (no final LayerNorm on the intermediates, class token stripped). A
+  decoder that needs multiple resolutions must upsample past the taps it
+  selects. timm's `vit_*` default `out_indices = 3` (the last three
+  blocks) is Luximm's `out_indices = (depth-2, depth-1, depth)`;
+  `nothing` (the default) returns every block.
 
 Families with a pyramid: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt,
-ConvNeXt V2. VGG, ViT, and CoAtNet raise an error explaining why.
+ConvNeXt V2, ViT. VGG and CoAtNet raise an error explaining why.
 
 ## Single-channel and other non-RGB inputs
 

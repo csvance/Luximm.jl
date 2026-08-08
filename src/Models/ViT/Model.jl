@@ -9,14 +9,19 @@
 #     config), a LayerNorm over the token sequence right after `pos_embed` and
 #     before `blocks` (timm `norm_pre`, mirroring OpenAI's `ln_pre`). Non-CLIP
 #     variants capture `identity` here, so the forward is uniform.
-#   - `blocks`: `depth` pre-norm transformer encoder blocks (Chain).
+#   - `blocks`: `depth` pre-norm transformer encoder blocks (captured as a
+#     NamedTuple of layers — see `_vit_backbone` — so the forward can step
+#     through them and collect intermediates; `Lux.setup` yields the same
+#     `ps.blocks.layer_i` subtree a `Chain` would).
 #   - final `norm` (LayerNorm over channel axis; eps per-variant: 1e-6 for
 #     timm ImageNet ViTs, 1e-5 for CLIP) over the full token sequence.
 #
 # `num_classes == 0` returns the full normed sequence `(embed_dim, T, N)` —
 # exactly timm `forward_features` (not pooled). `num_classes > 0` takes the
 # class token (position 1) and applies `head`, returning `(num_classes, N)`,
-# matching timm `forward`.
+# matching timm `forward`. `features_only == true` returns the raw per-block
+# outputs reshaped to a grid (class token dropped), matching timm
+# `features_only=True` for `vit_*` — see `vit_feature_info`.
 #
 # Token layout is `(C, T, N)`; see `src/Layers/{PatchEmbed,Attention,
 # TransformerBlock}.jl` for the per-layer numeric notes (qkv split order,
@@ -27,11 +32,21 @@
 
 include("Config.jl")
 
-# Shared backbone forward, called from both branches so the feature-extractor
-# and classifier paths cannot desync. Returns the full normed token sequence.
-# `norm_pre` is `identity` for non-CLIP variants, so the norm_pre call is a
-# no-op there — one code path for both.
-function _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
+# Shared encoder forward, called from every branch of `vit` so the
+# feature-extractor, features-only, and classifier paths cannot desync.
+# Runs the token pipeline (patch → class token → pos-embed → `norm_pre`)
+# and then steps through the encoder blocks one at a time, collecting each
+# raw post-block token sequence. The returned tuple is the `depth` raw
+# block outputs followed by the normed final sequence — the same tensor
+# `num_classes = 0` returns — so `last(taps)` is exactly timm's
+# `forward_features` output and `_vit_feature_selector` picks raw block
+# outputs for features-only mode.
+#
+# `norm_pre` is `identity` for non-CLIP variants, so the norm_pre call is
+# a no-op there — one code path for both. `blocks` is a NamedTuple of
+# layers (see `_vit_backbone`), iterated inside `@compact` as the wrapped
+# stateful layers, so each `blk(x)` call threads parameters automatically.
+function _vit_feature_taps(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
     x = patch(x)                          # (D, T_patch, N)
     D = size(x, 1)
     N = size(x, 3)
@@ -39,12 +54,101 @@ function _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
     x = cat(cls, x; dims = 2)             # (D, T, N), class token first
     x = x .+ pos_embed                    # pos_embed (D, T, 1) broadcasts over N
     x = norm_pre(x)                       # CLIP towers only; identity otherwise
-    x = blocks(x)
-    return norm(x)
+    taps = ()
+    for blk in blocks
+        x = blk(x)
+        taps = (taps..., x)
+    end
+    return (taps..., norm(x))
+end
+
+# Reshape one raw post-block token sequence from the `(D, T, N)` token layout
+# (class token first) into a `(W, H, D, N)` feature map with the class token
+# dropped. Token `t` sits at grid position `(w = (t-1) % W, h = (t-1) ÷ W)`
+# (row-major, w fastest), so a column-major reshape to `(D, W, H, N)` lands
+# the patch tokens on exactly the grid timm's `forward_intermediates` builds
+# with `y.reshape(B, H, W, D).permute(0, 3, 1, 2)`; the final permute puts the
+# spatial axes first to match every other Luximm family's `(W, H, C, N)` maps.
+function _vit_token_grid(x, grid::Int)
+    x = x[:, 2:end, :]                        # drop class token: (D, T_patch, N)
+    x = reshape(x, size(x, 1), grid, grid, size(x, 3))  # (D, W, H, N)
+    return permutedims(x, (2, 3, 1, 4))       # (W, H, D, N)
+end
+
+# Features-only selector for ViT: pick raw block outputs off the tap tuple
+# and grid-reshape each, mirroring timm's `FeatureGetterNet` wrapping of
+# `forward_intermediates(..., norm=False, output_fmt='NCHW')`. `indices` is
+# a compile-time-constant tuple, so the `map` unrolls and the returned tuple
+# stays type-stable.
+_vit_feature_selector(indices::NTuple{K,Int}, grid::Int) where {K} =
+    taps -> map(i -> _vit_token_grid(taps[i], grid), indices)
+
+# `num_classes = 0` feature extractor and classifier entry point: the full
+# normed token sequence `(D, T, N)`, exactly timm `forward_features`.
+_vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm) =
+    last(_vit_feature_taps(x, patch, cls_token, pos_embed, norm_pre, blocks, norm))
+
+"""
+    vit_feature_info(cfg) -> FeatureInfo
+
+Ordered feature taps for a ViT, matching timm's `feature_info` for the
+`vit_*` family: one tap per encoder block, every tap at the patch-size
+reduction with `embed_dim` channels. A plain ViT is single-scale — all
+levels sit at the same grid — so a UNet/FPN decoder that needs multiple
+resolutions must upsample past the taps it selects. Each tap is the raw
+post-block token sequence reshaped to a `(W, H, embed_dim, N)` grid with
+the class token dropped, matching timm's `features_only=True` output
+(`norm=False`, so no final LayerNorm is applied to the intermediates).
+"""
+function vit_feature_info(cfg::ViTVariant)
+    return FeatureInfo(
+        ntuple(i -> Symbol("layer_", i), cfg.depth),
+        ntuple(_ -> cfg.patch, cfg.depth),
+        ntuple(_ -> cfg.embed_dim, cfg.depth),
+    )
+end
+
+# Backbone half, shared by the `num_classes = 0` feature extractor
+# (`out_sel = last`) and the features-only tap selector
+# (`out_sel = _vit_feature_selector(indices, grid)`). Both build the
+# identical slot tree, so one pretrained mapping serves both.
+#
+# The encoder blocks are captured as a NamedTuple of layers rather than a
+# `Chain` so the body can step through them one at a time and collect the
+# intermediates; `Lux.setup` yields the same `ps.blocks.layer_i` subtree
+# either way, which is all `vit_mapping` addresses.
+function _vit_backbone(cfg::ViTVariant, in_chans::Int, variant::Symbol, out_sel)
+    D = cfg.embed_dim
+    T = vit_num_tokens(cfg)
+    img = cfg.img_size
+    eps = cfg.norm_eps
+    # timm uses `nn.Identity()` when `pre_norm=False`, so a captured `identity`
+    # keeps one forward for both CLIP and ImageNet variants.
+    norm_pre = cfg.pre_norm ? vit_layernorm(D; eps = eps) : identity
+    blocks = (;
+        (Symbol("layer_", i) =>
+         vit_block(D; num_heads = cfg.num_heads, eps = eps) for i = 1:cfg.depth)...,
+    )
+    @compact(
+        patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
+        cls_token = zeros32(D, 1, 1),
+        pos_embed = zeros32(D, T, 1),
+        norm_pre = norm_pre,
+        blocks = blocks,
+        norm = vit_layernorm(D; eps = eps),
+    ) do x
+        @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
+            "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
+            "Pos-embed interpolation is not implemented."
+        @return out_sel(
+            _vit_feature_taps(x, patch, cls_token, pos_embed, norm_pre, blocks, norm),
+        )
+    end
 end
 
 """
-    vit(variant; in_chans=3, num_classes=0) -> @compact block
+    vit(variant; in_chans=3, num_classes=0,
+        features_only=false, out_indices=nothing) -> @compact block
 
 Build a Vision Transformer. `variant` is a key from [`VIT_VARIANTS`](@ref),
 e.g. `:vit_base_patch16_224_augreg2_in21k_ft_in1k`.
@@ -53,6 +157,14 @@ When `num_classes == 0`, the forward returns the full normed token sequence
 `(embed_dim, T, N)`, matching `timm.forward_features(x)`. When `num_classes >
 0`, the class token is selected and passed through `head`, returning
 `(num_classes, N)`, matching `timm.forward(x)`.
+
+When `features_only == true`, the forward returns a tuple of per-block
+feature maps, one for each selected encoder block. See [`feature_info`](@ref)
+for the tap table and [`create_model`](@ref) for the shared semantics. This
+mirrors timm's `features_only=True` for the `vit_*` family exactly: every tap
+is that block's raw token-sequence output (no final LayerNorm), with the
+class token dropped and the remaining patch tokens reshaped to a
+`(W, H, embed_dim, N)` grid at the patch-size reduction.
 
 The input spatial size must equal the variant's native `img_size`; the
 absolute position embedding has no interpolation path yet.
@@ -64,16 +176,25 @@ function vit(
     features_only::Bool = false,
     out_indices = nothing,
 )
-    # No pyramid: a plain ViT is single-scale. timm synthesizes one by
-    # reshaping selected block outputs back to a grid, but every level then
-    # sits at the same reduction (the patch size), which is not what a
-    # UNet/FPN decoder wants.
-    _no_feature_pyramid("ViT", variant, features_only, out_indices)
     cfg = get(VIT_VARIANTS, variant) do
         error(
             "Unknown ViT variant: $variant. Known variants: " *
             "$(sort(collect(keys(VIT_VARIANTS))))",
         )
+    end
+    if features_only
+        indices = resolve_out_indices(vit_feature_info(cfg), out_indices, variant)
+        return _vit_backbone(
+            cfg,
+            in_chans,
+            variant,
+            _vit_feature_selector(indices, cfg.img_size ÷ cfg.patch),
+        )
+    end
+    _check_out_indices_unused(variant, out_indices)
+
+    if num_classes == 0
+        return _vit_backbone(cfg, in_chans, variant, last)
     end
     D = cfg.embed_dim
     T = vit_num_tokens(cfg)
@@ -82,39 +203,26 @@ function vit(
     # timm uses `nn.Identity()` when `pre_norm=False`, so a captured `identity`
     # keeps one forward for both CLIP and ImageNet variants.
     norm_pre = cfg.pre_norm ? vit_layernorm(D; eps = eps) : identity
-
-    if num_classes == 0
-        @compact(
-            patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
-            cls_token = zeros32(D, 1, 1),
-            pos_embed = zeros32(D, T, 1),
-            norm_pre = norm_pre,
-            blocks = Chain([vit_block(D; num_heads = cfg.num_heads, eps = eps) for _ = 1:cfg.depth]...),
-            norm = vit_layernorm(D; eps = eps),
-        ) do x
-            @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
-                "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
-                "Pos-embed interpolation is not implemented."
-            @return _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
-        end
-    else
-        nc = num_classes
-        @compact(
-            patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
-            cls_token = zeros32(D, 1, 1),
-            pos_embed = zeros32(D, T, 1),
-            norm_pre = norm_pre,
-            blocks = Chain([vit_block(D; num_heads = cfg.num_heads, eps = eps) for _ = 1:cfg.depth]...),
-            norm = vit_layernorm(D; eps = eps),
-            head = Dense(D => nc; init_bias = zeros32),
-        ) do x
-            @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
-                "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
-                "Pos-embed interpolation is not implemented."
-            x = _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
-            cls = reshape(x[:, 1:1, :], size(x, 1), size(x, 3))   # (D, N)
-            @return head(cls)
-        end
+    blocks = (;
+        (Symbol("layer_", i) =>
+         vit_block(D; num_heads = cfg.num_heads, eps = eps) for i = 1:cfg.depth)...,
+    )
+    nc = num_classes
+    @compact(
+        patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
+        cls_token = zeros32(D, 1, 1),
+        pos_embed = zeros32(D, T, 1),
+        norm_pre = norm_pre,
+        blocks = blocks,
+        norm = vit_layernorm(D; eps = eps),
+        head = Dense(D => nc; init_bias = zeros32),
+    ) do x
+        @assert size(x, 1) == img && size(x, 2) == img "ViT $variant expects " *
+            "$(img)x$(img) input; got $(size(x, 1))x$(size(x, 2)). " *
+            "Pos-embed interpolation is not implemented."
+        x = _vit_features(x, patch, cls_token, pos_embed, norm_pre, blocks, norm)
+        cls = reshape(x[:, 1:1, :], size(x, 1), size(x, 3))   # (D, N)
+        @return head(cls)
     end
 end
 

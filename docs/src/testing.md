@@ -118,7 +118,7 @@ into the corresponding Lux parameter path via
 ### The `features_only` fixture
 
 Variants in a family with a feature pyramid (ResNet, SE-ResNet, BiT
-ResNetV2, ConvNeXt, ConvNeXt V2) have a **second** fixture,
+ResNetV2, ConvNeXt, ConvNeXt V2, ViT) have a **second** fixture,
 `<variant_key>_featsonly_io.h5`, produced by a single shared sidecar
 rather than a per-family one. It holds timm's `features_only=True`
 outputs, one dataset per tap, plus timm's own tap table:
@@ -131,6 +131,12 @@ outputs, one dataset per tap, plus timm's own tap table:
   drifts (a wrong channel count, a missed reduction-2 stem tap) fails
   the test even when every tensor still has a plausible shape.
 
+The ViT dump is special-cased: `timm.create_model` drops `None` kwargs,
+so `out_indices=None` (every block) cannot go through the factory — the
+sidecar builds the bare model and wraps it in `FeatureGetterNet` directly
+instead, since Luximm's default is `nothing` = every tap while timm's
+`vit_*` default is the last three blocks.
+
 Dump one variant, one family, or everything:
 
 ```
@@ -138,11 +144,11 @@ Dump one variant, one family, or everything:
 uv run python test/parity/dump_features_only_io.py \
     --variant resnet50.a1_in1k
 
-# One family. The five pyramid families are: resnet, seresnet, bit,
-# convnext, convnextv2.
+# One family. The six pyramid families are: resnet, seresnet, bit,
+# convnext, convnextv2, vit.
 uv run python test/parity/dump_features_only_io.py --all --family bit
 
-# Every registered variant of all five families (70 fixtures)
+# Every registered variant of all six families (74 fixtures)
 uv run python test/parity/dump_features_only_io.py --all
 ```
 

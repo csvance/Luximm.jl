@@ -83,8 +83,17 @@ is an error) and builds the **same parameter tree** as the plain
 weights into it unchanged. Selecting fewer taps changes only the forward,
 never the tree: every stage is still built and still runs.
 
-Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2.
-VGG, ViT, and CoAtNet raise an error explaining why.
+Supported families: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2,
+ViT. VGG and CoAtNet raise an error explaining why.
+
+For the CNN families the taps form a true pyramid (increasing reduction).
+A ViT is single-scale, so its taps all sit at the patch-size reduction;
+they mirror timm's `features_only=True` for `vit_*` exactly — each tap is a
+selected block's raw output with the class token dropped and the patch
+tokens reshaped to a `(W, H, embed_dim, N)` grid (timm applies no final
+LayerNorm to the intermediates, and neither do we). timm's `vit_*` default
+`out_indices = 3` (the last three blocks) is Luximm's
+`out_indices = (depth-2, depth-1, depth)`.
 """
 function create_model(variant::Symbol; kwargs...)
     if get(kwargs, :features_only, false)
@@ -175,7 +184,7 @@ info.channels                # (64, 128, 256, 512)
 
 `out_indices` is validated exactly as `create_model` validates it, so the
 returned info always describes the tuple that model's forward produces.
-Families without a pyramid (VGG, ViT, CoAtNet) raise an error.
+Families without a pyramid (VGG, CoAtNet) raise an error.
 """
 function feature_info(variant::Symbol; out_indices = nothing)
     full = if haskey(BIT_VARIANTS, variant)
@@ -191,7 +200,7 @@ function feature_info(variant::Symbol; out_indices = nothing)
     elseif haskey(VGG_VARIANTS, variant)
         _no_feature_pyramid("VGG", variant, true, nothing)
     elseif haskey(VIT_VARIANTS, variant)
-        _no_feature_pyramid("ViT", variant, true, nothing)
+        vit_feature_info(VIT_VARIANTS[variant])
     elseif haskey(COATNET_VARIANTS, variant)
         _no_feature_pyramid("CoAtNet", variant, true, nothing)
     else

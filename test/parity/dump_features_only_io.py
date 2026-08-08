@@ -1,7 +1,7 @@
 """Dump timm `features_only=True` reference outputs for the pyramid families.
 
 One fixture per variant, covering every family Luximm builds a feature pyramid
-for (ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2):
+for (ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, ViT):
 
     /input                       deterministic torch.randn (seeded), NCHW
     /output/feat_01 ... feat_0K   timm features_only forward, one per tap
@@ -12,6 +12,12 @@ for (ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2):
 The two `/feature_*` vectors are what pins Luximm's `feature_info` tap table
 to timm's: a tap list that drifts (wrong channel count, a missed reduction-2
 stem tap) fails the test even when every tensor still has a plausible shape.
+
+For the `vit_*` family the dump passes `out_indices=None` so every encoder
+block is dumped: timm's `vit_*` factory defaults to the last three blocks,
+while Luximm's default is `nothing` = every tap. Each ViT tap is the raw
+post-block token output reshaped to a grid (class token dropped, no final
+LayerNorm) — see `timm.VisionTransformer.forward_intermediates`.
 
 Usage:
     uv run python test/parity/dump_features_only_io.py --all
@@ -39,9 +45,9 @@ from _dump_common import dump, to_numpy
 
 
 # Short key (the Luximm variant symbol) -> (full timm name, Luximm test
-# family). Covers every registered variant of the five families that build a
+# family). Covers every registered variant of the six families that build a
 # feature pyramid, so a full CI sweep produces a fixture for each one and no
-# variant silently skips its pyramid testset. VGG / ViT / CoAtNet are absent
+# variant silently skips its pyramid testset. VGG / CoAtNet are absent
 # on purpose: they have no pyramid.
 FEATURES_ONLY_VARIANTS: Mapping[str, Tuple[str, str]] = {
     # resnet (5)
@@ -119,7 +125,18 @@ FEATURES_ONLY_VARIANTS: Mapping[str, Tuple[str, str]] = {
     "convnextv2_tiny_fcmae_ft_in1k": ("convnextv2_tiny.fcmae_ft_in1k", "convnextv2"),
     "convnextv2_tiny_fcmae_ft_in22k_in1k": ("convnextv2_tiny.fcmae_ft_in22k_in1k", "convnextv2"),
     "convnextv2_tiny_fcmae_ft_in22k_in1k_384": ("convnextv2_tiny.fcmae_ft_in22k_in1k_384", "convnextv2"),
+    # vit (4)
+    "vit_base_patch16_224_augreg2_in21k_ft_in1k": ("vit_base_patch16_224.augreg2_in21k_ft_in1k", "vit"),
+    "vit_base_patch16_clip_224_openai_ft_in1k": ("vit_base_patch16_clip_224.openai_ft_in1k", "vit"),
+    "vit_base_patch32_clip_224_openai_ft_in1k": ("vit_base_patch32_clip_224.openai_ft_in1k", "vit"),
+    "vit_large_patch14_clip_224_openai_ft_in1k": ("vit_large_patch14_clip_224.openai_ft_in1k", "vit"),
 }
+
+# timm's `vit_*` factory pops `out_indices = 3` (last three blocks) as its
+# features_only default; Luximm's default is `nothing` = every tap, so the
+# ViT dump builds the wrapper directly with `out_indices=None` (see
+# `run_one`) to cover the whole block list.
+VIT_FAMILY = "vit"
 
 
 def default_out_path(short_key: str) -> str:
@@ -132,16 +149,41 @@ def default_out_path(short_key: str) -> str:
     return os.path.join(parity_dir, f"{short_key}_featsonly_io.h5")
 
 
-def run_one(short_key: str, full_name: str, out_path: str, seed: int = 0) -> None:
+def run_one(
+    short_key: str,
+    full_name: str,
+    out_path: str,
+    seed: int = 0,
+    family: str = "",
+) -> None:
     if os.path.exists(out_path):
         print(f"[{short_key}] cached at {out_path}; skipping")
         return
     print(f"[{short_key}] building timm model {full_name!r} (features_only) ...")
-    model = timm.create_model(full_name, pretrained=True, features_only=True).eval()
+    if family == VIT_FAMILY:
+        # `timm.create_model` drops None kwargs (`models/_factory.py`), so
+        # `out_indices=None` cannot request every block through the factory
+        # — it silently falls back to the `vit_*` default of the last three
+        # blocks. Build the bare model and wrap it directly; FeatureGetterNet
+        # normalizes `None` to every block index.
+        from timm.models._features import FeatureGetterNet
+
+        model = FeatureGetterNet(
+            timm.create_model(full_name, pretrained=True).eval(),
+            out_indices=None,
+        )
+    else:
+        model = timm.create_model(
+            full_name,
+            pretrained=True,
+            features_only=True,
+        ).eval()
 
     # `features_only` models drop the classifier, so `default_cfg` is still the
-    # place to get the native input resolution.
-    _cfg_c, height, width = model.default_cfg["input_size"]
+    # place to get the native input resolution. The hand-built ViT wrapper
+    # carries no `default_cfg`; read it from the wrapped model instead.
+    cfg_model = model.model if family == VIT_FAMILY else model
+    _cfg_c, height, width = cfg_model.default_cfg["input_size"]
     gen = torch.Generator().manual_seed(seed)
     x = torch.randn(1, 3, height, width, generator=gen)
 
@@ -174,12 +216,12 @@ def run_one(short_key: str, full_name: str, out_path: str, seed: int = 0) -> Non
         f.create_dataset("feature_reductions", data=reductions)
 
 
-PYRAMID_FAMILIES = ("resnet", "seresnet", "bit", "convnext", "convnextv2")
+PYRAMID_FAMILIES = ("resnet", "seresnet", "bit", "convnext", "convnextv2", "vit")
 
 # Families Luximm registers that have no feature pyramid. A `--variant` from
 # one of these exits 0 with a note instead of failing, so the CI builder can
 # call this sidecar for every family without special-casing.
-NO_PYRAMID_PREFIXES = ("vgg", "vit", "coatnet")
+NO_PYRAMID_PREFIXES = ("vgg", "coatnet")
 
 
 def main() -> None:
@@ -204,7 +246,8 @@ def main() -> None:
         scope = args.family or "all families"
         print(f"[features_only] sweeping {len(selected)} variant(s) for {scope}")
         for short, full in selected:
-            run_one(short, full, default_out_path(short), seed=args.seed)
+            family = FEATURES_ONLY_VARIANTS[short][1]
+            run_one(short, full, default_out_path(short), seed=args.seed, family=family)
         return
 
     if not args.variant:
@@ -213,6 +256,7 @@ def main() -> None:
     arg = args.variant
     if arg in FEATURES_ONLY_VARIANTS:
         short, full = arg, FEATURES_ONLY_VARIANTS[arg][0]
+        family = FEATURES_ONLY_VARIANTS[arg][1]
     else:
         short = next(
             (k for k, v in FEATURES_ONLY_VARIANTS.items() if v[0] == arg), None)
@@ -229,7 +273,8 @@ def main() -> None:
                 f"known full names: "
                 f"{sorted(v[0] for v in FEATURES_ONLY_VARIANTS.values())}")
         full = arg
-    run_one(short, full, args.out or default_out_path(short), seed=args.seed)
+        family = FEATURES_ONLY_VARIANTS[short][1]
+    run_one(short, full, args.out or default_out_path(short), seed=args.seed, family=family)
 
 
 if __name__ == "__main__":
