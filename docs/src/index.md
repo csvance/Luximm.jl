@@ -1,8 +1,54 @@
+```@raw html
+---
+layout: home
+
+hero:
+  name: Luximm.jl
+  text: timm backbones for Lux.jl
+  tagline: Pretrained weights loaded directly from HuggingFace Hub in .safetensors format.
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /getting_started/
+    - theme: alt
+      text: API Reference
+      link: /api/
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/csvance/Luximm.jl
+  image:
+    src: /logo.svg
+    alt: Luximm.jl
+
+features:
+  - icon: 📦
+    title: Pretrained weights
+    details: "`create_pretrained` returns a Lux model and a closure that loads the released `timm` weights into `(ps, st)`."
+    link: /getting_started/
+  - icon: 🧩
+    title: Backbone families
+    details: ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, VGG, ViT, and CoAtNet, each with its weight license listed below.
+    link: "#Available-backbones"
+  - icon: 🔍
+    title: Feature extraction
+    details: Drop the classifier head with `num_classes = 0`, or return a multi-scale feature pyramid with `features_only = true`.
+    link: /getting_started/#Feature-extractor-mode
+  - icon: ✅
+    title: Parity tested
+    details: For every registered variant, the Julia forward must match the `timm` forward on the same input and weights.
+    link: /testing/
+  - icon: 🛠️
+    title: Porting guide
+    details: A contributor guide for adding a new `timm` backbone, with the parity-driven workflow.
+    link: /porting/
+---
+```
+
 ```@meta
 CurrentModule = Luximm
 ```
 
-# Luximm.jl
+## Overview
 
 Julia ports of [`timm`](https://github.com/huggingface/pytorch-image-models)
 (PyTorch Image Models, by Ross Wightman) backbones for

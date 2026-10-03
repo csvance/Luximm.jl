@@ -180,8 +180,8 @@ end
 """
     feature_info(variant; out_indices=nothing) -> FeatureInfo
 
-Tap table for `variant` in feature-pyramid mode: the reduction (spatial
-stride) and channel count of each feature map a
+Tap table for `variant` in feature-pyramid mode. It lists the reduction
+(spatial stride) and channel count of each feature map a
 `create_model(variant; features_only = true)` model returns, ordered by
 increasing reduction. The Luximm analog of timm's `model.feature_info`.
 
