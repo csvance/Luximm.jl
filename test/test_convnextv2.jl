@@ -46,3 +46,25 @@ const VARIANTS_TO_TEST = Tuple(sort(collect(keys(Luximm.CONVNEXTV2_VARIANTS))))
         end
     end
 end
+
+# `conv_mlp = false`: timm's channels-last block layout (LayerNorm over a contiguous channel axis,
+# GEMM pointwise layers). No fixtures or downloads: it is checked against the default layout,
+# which the parity tests above pin to timm.
+@testset "ConvNeXtV2 conv_mlp = false" begin
+    v = :convnextv2_tiny_fcmae_ft_in22k_in1k
+    a = Luximm.create_model(v; num_classes = 0)
+    b = Luximm.create_model(v; num_classes = 0, conv_mlp = false)
+    ps_a, st_a = Lux.setup(Xoshiro(0), a)
+    ps_b, st_b = Lux.setup(Xoshiro(0), b)
+    @test ps_a == ps_b                     # names, shapes and values: weights load unchanged
+    @test st_a == st_b
+    # GRN is zero-initialized (identity); give it non-trivial parameters so its path is exercised.
+    ps = Lux.Functors.fmap_with_path(ps_a) do kp, x
+        any(==(:grn), kp) ? randn(Xoshiro(hash(kp)), Float32, size(x)) .* 0.1f0 : x
+    end
+    x = randn(Xoshiro(1), Float32, 64, 64, 3, 2)
+    y_a, _ = a(x, ps, st_a)
+    y_b, _ = b(x, ps, st_b)
+    @test size(y_a) == size(y_b)
+    @test isapprox(y_b, y_a; rtol = 1.0f-4, atol = 1.0f-5)
+end
