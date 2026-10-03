@@ -46,8 +46,9 @@ function std_conv(
     ) do x
         w = conv.ps.weight  # (kW, kH, in, out); reach through StatefulLuxLayer
         w_flat = reshape(w, (:, out_ch))                          # (kW*kH*in, out)
-        μ = mean(w_flat; dims = 1)                                # (1, out)
-        σ² = var(w_flat; dims = 1, corrected = false)             # (1, out)
+        # LuxLib's `mean_var`, so weight standardization gets whatever its backends specialize
+        # (under Reactant, a backward without the identically zero ∂σ²/∂μ term).
+        μ, σ² = Lux.LuxLib.Impl.mean_var(w_flat; dims = 1, corrected = false)   # (1, out) each
         ŵ_flat = (w_flat .- μ) ./ sqrt.(σ² .+ eps)
         ŵ = reshape(ŵ_flat, (kW, kH, in_ch, out_ch))
         cdims = NNlib.DenseConvDims(
