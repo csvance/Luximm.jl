@@ -25,7 +25,7 @@ Conv leaves (`identity`, or `adapt_input_conv` for the weight when
 `in_chans != 3`).
 """
 function patch_embed(in_chans::Int, embed_dim::Int; patch::Int = 16, use_bias::Bool = true)
-    @compact(
+    return @compact(
         proj = Conv(
             (patch, patch),
             in_chans => embed_dim;

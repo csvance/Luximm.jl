@@ -34,7 +34,7 @@ using JimmCI.PathFilter
         @test families_for_paths(["src/Layers/conv.jl"]) == collect(ALL_FAMILIES)
         @test families_for_paths(["src/Interop/foo.jl"]) == collect(ALL_FAMILIES)
         @test families_for_paths(["src/Models/ConvNeXtCommon/x.jl"]) ==
-              collect(ALL_FAMILIES)
+            collect(ALL_FAMILIES)
         @test families_for_paths(["ci/whatever.jl"]) == collect(ALL_FAMILIES)
     end
 
@@ -48,12 +48,12 @@ using JimmCI.PathFilter
 
     @testset "multi-family in canonical order" begin
         @test families_for_paths(["src/Models/ConvNeXt/x.jl", "src/Models/ResNet/y.jl"]) ==
-              ["resnet", "convnext"]
+            ["resnet", "convnext"]
     end
 
     @testset "shared wins over per-family" begin
         @test families_for_paths(["src/Models/ResNet/foo.jl", "src/Layers/conv.jl"]) ==
-              collect(ALL_FAMILIES)
+            collect(ALL_FAMILIES)
     end
 
     @testset "REPRESENTATIVE_VARIANT covers every family" begin

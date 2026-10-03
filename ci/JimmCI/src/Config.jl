@@ -27,7 +27,7 @@ struct Config
 
     julia_binary::String
     uv_binary::String
-    hf_token::Union{String,Nothing}
+    hf_token::Union{String, Nothing}
 end
 
 repo_fullname(c::Config) = string(c.repo_owner, "/", c.repo_name)

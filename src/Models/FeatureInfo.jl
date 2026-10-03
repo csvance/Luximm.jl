@@ -41,19 +41,19 @@ info.indices      # (2, 3, 4, 5)
 ```
 """
 struct FeatureInfo{K}
-    names::NTuple{K,Symbol}
-    reductions::NTuple{K,Int}
-    channels::NTuple{K,Int}
-    indices::NTuple{K,Int}
+    names::NTuple{K, Symbol}
+    reductions::NTuple{K, Int}
+    channels::NTuple{K, Int}
+    indices::NTuple{K, Int}
 end
 
 # Full, unfiltered tap list: indices are implicitly 1:K. Every family builds
 # its table through this constructor.
 function FeatureInfo(
-    names::NTuple{K,Symbol},
-    reductions::NTuple{K,Int},
-    channels::NTuple{K,Int},
-) where {K}
+        names::NTuple{K, Symbol},
+        reductions::NTuple{K, Int},
+        channels::NTuple{K, Int},
+    ) where {K}
     return FeatureInfo{K}(names, reductions, channels, ntuple(identity, K))
 end
 
@@ -61,7 +61,7 @@ Base.length(::FeatureInfo{K}) where {K} = K
 
 function Base.show(io::IO, info::FeatureInfo{K}) where {K}
     print(io, "FeatureInfo($K taps:")
-    for i = 1:K
+    for i in 1:K
         print(
             io,
             " [",
@@ -83,7 +83,7 @@ end
 function _feature_tap_table(info::FeatureInfo{K}) where {K}
     rows = [
         "  $(info.indices[i]) => $(info.names[i]) " *
-        "(reduction $(info.reductions[i]), $(info.channels[i]) channels)" for i = 1:K
+            "(reduction $(info.reductions[i]), $(info.channels[i]) channels)" for i in 1:K
     ]
     return join(rows, "\n")
 end
@@ -93,7 +93,7 @@ end
 
 Narrow a family's full [`FeatureInfo`](@ref) to the taps at `indices`.
 """
-function select_features(info::FeatureInfo, indices::NTuple{K,Int}) where {K}
+function select_features(info::FeatureInfo, indices::NTuple{K, Int}) where {K}
     return FeatureInfo{K}(
         map(i -> info.names[i], indices),
         map(i -> info.reductions[i], indices),
@@ -115,7 +115,7 @@ function resolve_out_indices(info::FeatureInfo{K}, out_indices, variant::Symbol)
     idx = Tuple(out_indices)
     isempty(idx) && error(
         "out_indices for $variant is empty; pass at least one tap, or " *
-        "`nothing` for all $K.",
+            "`nothing` for all $K.",
     )
     all(i -> i isa Integer, idx) ||
         error("out_indices for $variant must be integers; got $(out_indices).")
@@ -123,13 +123,13 @@ function resolve_out_indices(info::FeatureInfo{K}, out_indices, variant::Symbol)
     for i in idx
         1 <= i <= K || error(
             "out_indices entry $i is out of range for $variant, which has " *
-            "$K taps (1-based; timm's 0-based index $(i - 1) is Luximm's $i):\n" *
-            _feature_tap_table(info),
+                "$K taps (1-based; timm's 0-based index $(i - 1) is Luximm's $i):\n" *
+                _feature_tap_table(info),
         )
     end
-    all(idx[i] < idx[i+1] for i = 1:(length(idx)-1)) || error(
+    all(idx[i] < idx[i + 1] for i in 1:(length(idx) - 1)) || error(
         "out_indices for $variant must be strictly increasing; got $(idx). " *
-        "Returned features are ordered by increasing reduction.",
+            "Returned features are ordered by increasing reduction.",
     )
     return idx
 end
@@ -137,14 +137,14 @@ end
 # Maps a family's full tap tuple to the selected subset. Captured by the
 # features-only `@compact` body, so `indices` is a compile-time-constant
 # tuple and the returned tuple stays type-stable under Reactant tracing.
-feature_selector(indices::NTuple{K,Int}) where {K} = taps -> map(i -> taps[i], indices)
+feature_selector(indices::NTuple{K, Int}) where {K} = taps -> map(i -> taps[i], indices)
 
 # `out_indices` only means something in features-only mode; silently ignoring
 # it would hand back a single feature map to a caller who asked for four.
 function _check_out_indices_unused(variant::Symbol, out_indices)
     out_indices === nothing || error(
         "`out_indices` requires `features_only = true` (variant $variant); " *
-        "got out_indices = $(out_indices).",
+            "got out_indices = $(out_indices).",
     )
     return nothing
 end
@@ -153,15 +153,15 @@ end
 # constructors so a direct `vgg(...; features_only = true)` fails the same
 # way `create_model` does.
 function _no_feature_pyramid(
-    family::AbstractString,
-    variant::Symbol,
-    features_only::Bool,
-    out_indices,
-)
+        family::AbstractString,
+        variant::Symbol,
+        features_only::Bool,
+        out_indices,
+    )
     features_only && error(
         "$family has no feature-pyramid support yet, so `features_only = true` " *
-        "is not available for $variant. Families with a pyramid: ResNet, " *
-        "SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, ViT.",
+            "is not available for $variant. Families with a pyramid: ResNet, " *
+            "SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, ViT.",
     )
     _check_out_indices_unused(variant, out_indices)
     return nothing

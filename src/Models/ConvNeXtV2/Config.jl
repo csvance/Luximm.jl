@@ -35,8 +35,8 @@ Fields:
 """
 struct ConvNeXtV2Variant
     name::Symbol
-    depths::NTuple{4,Int}
-    dims::NTuple{4,Int}
+    depths::NTuple{4, Int}
+    dims::NTuple{4, Int}
     hf_repo::String
     default_num_classes::Int
     default_input_size::Int
@@ -70,7 +70,7 @@ Lookup table for the ConvNeXtV2 variants this package ports. The
 ImageNet head. `convnextv2_small` is not included because timm only
 registers it as `.untrained` (no pretrained weights).
 """
-const CONVNEXTV2_VARIANTS = Dict{Symbol,ConvNeXtV2Variant}(
+const CONVNEXTV2_VARIANTS = Dict{Symbol, ConvNeXtV2Variant}(
     # atto
     :convnextv2_atto_fcmae => ConvNeXtV2Variant(
         :convnextv2_atto_fcmae,

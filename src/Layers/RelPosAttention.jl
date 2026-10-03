@@ -30,11 +30,11 @@ the relative offset between query token `i` and key token `j`.
 function rel_pos_index(Wh::Int, Ww::Int)
     L = Wh * Ww
     # token t (1-based) ↔ (h, w) with width fastest: t-1 = h*Ww + w.
-    hs = [div(t - 1, Ww) for t = 1:L]
-    ws = [mod(t - 1, Ww) for t = 1:L]
+    hs = [div(t - 1, Ww) for t in 1:L]
+    ws = [mod(t - 1, Ww) for t in 1:L]
     idx = Matrix{Int}(undef, L, L)
     span = 2 * Ww - 1
-    @inbounds for j = 1:L, i = 1:L
+    @inbounds for j in 1:L, i in 1:L
         dh = hs[i] - hs[j] + (Wh - 1)
         dw = ws[i] - ws[j] + (Ww - 1)
         idx[i, j] = dh * span + dw + 1   # +1 for 1-based table indexing
@@ -58,7 +58,7 @@ PyTorch keys: `qkv.weight/bias` → `(:qkv, :weight/:bias)`
 `rel_pos.relative_position_bias_table` → `(:rel_pos_bias_table,)`
 (`axis_reverse`, to `(num_rel, num_heads)`).
 """
-function rel_pos_attention(dim::Int, dim_out::Int; dim_head::Int = 32, window::Tuple{Int,Int})
+function rel_pos_attention(dim::Int, dim_out::Int; dim_head::Int = 32, window::Tuple{Int, Int})
     num_heads = dim ÷ dim_head
     scale = Float32(1 / sqrt(dim_head))
     Wh, Ww = window
@@ -67,7 +67,7 @@ function rel_pos_attention(dim::Int, dim_out::Int; dim_head::Int = 32, window::T
     # Closure constant (not a trainable param): the gather index. Captured by
     # the do-block, mirroring how `num_heads`/`scale` are captured.
     ridx = vec(rel_pos_index(Wh, Ww))   # (L*L,), column-major (i fastest)
-    @compact(
+    return @compact(
         qkv = Conv(
             (1, 1),
             dim => 3dim;

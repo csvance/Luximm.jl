@@ -15,12 +15,12 @@ summary wording (`:run` for the in-TUI decline path, `:skip` for the
 explicit skip CLI).
 """
 function mark_skipped(
-    gh::GitHubApp,
-    repo::AbstractString,
-    sha::AbstractString,
-    families;
-    source::Symbol = :run,
-)
+        gh::GitHubApp,
+        repo::AbstractString,
+        sha::AbstractString,
+        families;
+        source::Symbol = :run,
+    )
     today_str = Dates.format(Dates.today(), dateformat"yyyy-mm-dd")
     summary =
         source === :skip ?
@@ -29,7 +29,7 @@ function mark_skipped(
         "pushing a new commit on top." :
         "Cancelled by `jimm-ci` on $today_str. " *
         "Push a new commit on the PR to re-prompt."
-    output = Dict{String,Any}("title" => "Skipped", "summary" => summary)
+    output = Dict{String, Any}("title" => "Skipped", "summary" => summary)
     for family in families
         create_check_run(
             gh,

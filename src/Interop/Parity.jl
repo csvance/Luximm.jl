@@ -35,7 +35,7 @@ axes reversed). Per-tensor permutations are the caller's responsibility.
 dataset, or a `Dict{String, Array{Float32}}` if it wrote `/output/<name>`.
 """
 function read_parity(path::AbstractString)
-    HDF5.h5open(path, "r") do f
+    return HDF5.h5open(path, "r") do f
         input = Float32.(read(f["input"]))
         state_dict = _read_state_dict(f["state_dict"])
         output = _read_output(f["output"])
@@ -44,7 +44,7 @@ function read_parity(path::AbstractString)
 end
 
 function _read_state_dict(g)
-    out = Dict{String,Array{Float32}}()
+    out = Dict{String, Array{Float32}}()
     for k in keys(g)
         out[k] = Float32.(read(g[k]))
     end
@@ -55,7 +55,7 @@ function _read_output(node)
     if node isa HDF5.Dataset
         return Float32.(read(node))
     elseif node isa HDF5.Group
-        out = Dict{String,Array{Float32}}()
+        out = Dict{String, Array{Float32}}()
         for k in keys(node)
             out[k] = Float32.(read(node[k]))
         end
@@ -81,7 +81,7 @@ an iterable of `(pytorch_key, lux_path, transform)` triples where:
 
 The original `ps` is not mutated; the caller must bind the return value.
 """
-function apply_state_dict(ps, state_dict::Dict{String,<:AbstractArray}, mapping)
+function apply_state_dict(ps, state_dict::Dict{String, <:AbstractArray}, mapping)
     out = ps
     for (pykey, lux_path, transform) in mapping
         haskey(state_dict, pykey) || error("missing PyTorch state_dict key: $pykey")
@@ -91,7 +91,7 @@ function apply_state_dict(ps, state_dict::Dict{String,<:AbstractArray}, mapping)
     return out
 end
 
-function _set_leaf(nt::NamedTuple, path::NTuple{N,Symbol}, leaf) where {N}
+function _set_leaf(nt::NamedTuple, path::NTuple{N, Symbol}, leaf) where {N}
     head = path[1]
     haskey(nt, head) || error("leaf path missing key: $head (have: $(propertynames(nt)))")
     if N == 1
@@ -183,7 +183,7 @@ function adapt_input_conv(in_chans::Int)
             if I > 3
                 I % 3 == 0 || error(
                     "adapt_input_conv: cannot collapse $I-channel " *
-                    "stem weight to 1 channel: I % 3 must be 0",
+                        "stem weight to 1 channel: I % 3 must be 0",
                 )
                 grouped = reshape(w32, kW, kH, 3, I ÷ 3, O)
                 return dropdims(sum(grouped; dims = 3); dims = 3)
@@ -193,7 +193,7 @@ function adapt_input_conv(in_chans::Int)
         else
             I == 3 || error(
                 "adapt_input_conv: only supports adapting from I=3 to " *
-                "in_chans=$in_chans; got I=$I",
+                    "in_chans=$in_chans; got I=$I",
             )
             n_repeat = cld(in_chans, 3)
             tiled = repeat(w32, 1, 1, n_repeat, 1)

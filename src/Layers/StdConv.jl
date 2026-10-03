@@ -17,16 +17,16 @@ Use this in place of `Conv` when porting a `timm` model that wraps its
 convolutions in `StdConv2d` (BiT-ResNet, NFNet, etc.).
 """
 function std_conv(
-    kW::Int,
-    kH::Int,
-    in_ch::Int,
-    out_ch::Int;
-    stride::Int = 1,
-    pad::Int = 0,
-    eps::Float32 = 1.0f-8,
-    init_weight = glorot_uniform,
-)
-    @compact(
+        kW::Int,
+        kH::Int,
+        in_ch::Int,
+        out_ch::Int;
+        stride::Int = 1,
+        pad::Int = 0,
+        eps::Float32 = 1.0f-8,
+        init_weight = glorot_uniform,
+    )
+    return @compact(
         conv = Conv(
             (kW, kH),
             in_ch => out_ch;

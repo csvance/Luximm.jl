@@ -39,10 +39,10 @@ Fields:
 """
 struct BiTVariant
     name::Symbol
-    layers::NTuple{4,Int}
+    layers::NTuple{4, Int}
     width_factor::Int
     stem_chs::Int
-    stage_chs::NTuple{4,Int}
+    stage_chs::NTuple{4, Int}
     num_features::Int
     hf_repo::String
     default_num_classes::Int
@@ -57,7 +57,7 @@ mirror the timm model name with the dot rewritten as an underscore (the
 dot is reserved in Julia identifiers); the full timm name with the dot
 lives at `BIT_VARIANTS[key].hf_repo`.
 """
-const BIT_VARIANTS = Dict{Symbol,BiTVariant}(
+const BIT_VARIANTS = Dict{Symbol, BiTVariant}(
     :resnetv2_50x1_bit_goog_in21k => BiTVariant(
         :resnetv2_50x1_bit_goog_in21k,
         (3, 4, 6, 3),

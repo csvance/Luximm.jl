@@ -13,7 +13,7 @@ const LOG = Logging.global_logger()
 
 # Maps test family → Python sidecar that dumps its parity fixtures.
 # Mirrors the family resolution in scripts/test_variant.sh.
-const _FAMILY_SIDECAR = Dict{String,String}(
+const _FAMILY_SIDECAR = Dict{String, String}(
     "bit" => "test/parity/dump_resnetv2_bit_io.py",
     "resnet" => "test/parity/dump_resnet_io.py",
     "convnext" => "test/parity/dump_convnext_io.py",
@@ -44,13 +44,13 @@ end
 
 mutable struct BuildCancel
     cancelled::Bool
-    proc::Union{Nothing,Base.Process}
+    proc::Union{Nothing, Base.Process}
     lock::ReentrantLock
 end
 BuildCancel() = BuildCancel(false, nothing, ReentrantLock())
 
 function request_cancel!(t::BuildCancel)
-    @lock t.lock begin
+    return @lock t.lock begin
         t.cancelled = true
         p = t.proc
         if p !== nothing && process_running(p)
@@ -82,7 +82,7 @@ function _read_tail(path::AbstractString; limit::Int = MAX_OUTPUT_TEXT)
         return String(data)
     end
     head = b"[... log truncated ...]\n"
-    tail = data[(end-(limit-length(head))+1):end]
+    tail = data[(end - (limit - length(head)) + 1):end]
     return String(vcat(head, tail))
 end
 
@@ -95,20 +95,20 @@ waits up to 10 s, then SIGKILL. Returns the child's exit code (or a
 nonzero sentinel on cancellation).
 """
 function _stream_subprocess(
-    cmd::Cmd,
-    env::Dict{String,String},
-    log_path::AbstractString,
-    on_line::Function,
-    token::BuildCancel;
-    cwd::Union{Nothing,AbstractString} = nothing,
-)
+        cmd::Cmd,
+        env::Dict{String, String},
+        log_path::AbstractString,
+        on_line::Function,
+        token::BuildCancel;
+        cwd::Union{Nothing, AbstractString} = nothing,
+    )
     mkpath(dirname(log_path))
     full_cmd = addenv(cmd, env)
     cwd === nothing || (full_cmd = setenv(full_cmd; dir = cwd))
     full_cmd = Cmd(full_cmd; detach = true)
 
     pipe = Pipe()
-    open(log_path, "w") do logio
+    return open(log_path, "w") do logio
         write(logio, "\$ ")
         write(logio, string(cmd))
         write(logio, "\n")
@@ -144,16 +144,16 @@ function _stream_subprocess(
                 try
                     on_line(line)
                 catch e
-                    @warn "on_line callback raised" exception=e
+                    @warn "on_line callback raised" exception = e
                 end
             end
         finally
             wait(proc)
             _detach!(token)
             try
-                ; fetch(watchdog);
+                ; fetch(watchdog)
             catch
-                ;
+
             end
         end
 
@@ -164,11 +164,11 @@ end
 # ── Git plumbing ──────────────────────────────────────────────────────
 
 function _git(
-    cfg::Config,
-    args::Vector{String};
-    cwd::AbstractString,
-    log_path::AbstractString,
-)
+        cfg::Config,
+        args::Vector{String};
+        cwd::AbstractString,
+        log_path::AbstractString,
+    )
     env = copy(ENV)
     env["GIT_TERMINAL_PROMPT"] = "0"
     cmd = Cmd(["git"; args])
@@ -194,7 +194,7 @@ end
 
 function _is_bare_repo(path::AbstractString)
     isdir(path) || return false
-    env = copy(ENV);
+    env = copy(ENV)
     env["GIT_TERMINAL_PROMPT"] = "0"
     try
         out = read(setenv(`git -C $path rev-parse --is-bare-repository`, env), String)
@@ -211,7 +211,7 @@ end
 const _PR_REFSPEC = "+refs/pull/*/head:refs/remotes/origin/pr/*"
 
 function _ensure_pr_refspec!(cfg::Config)
-    env = copy(ENV);
+    env = copy(ENV)
     env["GIT_TERMINAL_PROMPT"] = "0"
     existing = try
         read(
@@ -222,7 +222,7 @@ function _ensure_pr_refspec!(cfg::Config)
         ""
     end
     occursin(_PR_REFSPEC, existing) && return
-    _git(
+    return _git(
         cfg,
         ["-C", cfg.mirror_dir, "config", "--add", "remote.origin.fetch", _PR_REFSPEC];
         cwd = cfg.mirror_dir,
@@ -233,10 +233,10 @@ end
 function _ensure_mirror!(b::Builder)
     cfg = b.cfg
     if isdir(cfg.mirror_dir) && !_is_bare_repo(cfg.mirror_dir)
-        @warn "mirror dir is not a usable bare repo; recloning" path=cfg.mirror_dir
+        @warn "mirror dir is not a usable bare repo; recloning" path = cfg.mirror_dir
         rm(cfg.mirror_dir; recursive = true, force = true)
     end
-    if !isdir(cfg.mirror_dir)
+    return if !isdir(cfg.mirror_dir)
         mkpath(dirname(cfg.mirror_dir))
         _git(
             cfg,
@@ -290,7 +290,7 @@ end
 
 function _drop_worktree!(b::Builder, wt::AbstractString)
     cfg = b.cfg
-    try
+    return try
         _git(
             cfg,
             ["-C", cfg.mirror_dir, "worktree", "remove", "--force", wt];
@@ -298,14 +298,14 @@ function _drop_worktree!(b::Builder, wt::AbstractString)
             log_path = joinpath(cfg.log_dir, basename(wt), "worktree-remove.log"),
         )
     catch e
-        @warn "worktree remove failed" wt exception=e
+        @warn "worktree remove failed" wt exception = e
         isdir(wt) && rm(wt; recursive = true, force = true)
     end
 end
 
 # ── Env construction ─────────────────────────────────────────────────
 
-function _env_for_run(cfg::Config, families::Vector{String}, variants::Dict{String,String})
+function _env_for_run(cfg::Config, families::Vector{String}, variants::Dict{String, String})
     env = copy(ENV)
     env["JULIA_NUM_THREADS"] = get(ENV, "JULIA_NUM_THREADS", "4")
     env["HF_HUB_CACHE"] = cfg.hf_cache
@@ -357,11 +357,11 @@ function _uv_cmd(cfg::Config, args::Vector{String})
     resolved = isabspath(exe) ? (isfile(exe) ? exe : nothing) : Sys.which(exe)
     resolved === nothing && error(
         "cannot find the `uv` executable (tried \"$exe\"). The parity " *
-        "sidecars need it. Install it per ci/README.md and either put it on " *
-        "the builder's PATH, symlink it into /usr/local/bin, or set " *
-        "JIMM_CI_UV to its absolute path. Note the builder often runs with a " *
-        "service-manager PATH that excludes ~/.local/bin, where uv's " *
-        "installer puts it.",
+            "sidecars need it. Install it per ci/README.md and either put it on " *
+            "the builder's PATH, symlink it into /usr/local/bin, or set " *
+            "JIMM_CI_UV to its absolute path. Note the builder often runs with a " *
+            "service-manager PATH that excludes ~/.local/bin, where uv's " *
+            "installer puts it.",
     )
     return Cmd(String[String(resolved), args...])
 end
@@ -369,14 +369,14 @@ end
 # ── Parity fixture dump ──────────────────────────────────────────────
 
 function _ensure_fixtures!(
-    b::Builder,
-    job::Job,
-    wt::AbstractString,
-    family::AbstractString,
-    variant::AbstractString,
-    on_line::Function,
-    token::BuildCancel,
-)
+        b::Builder,
+        job::Job,
+        wt::AbstractString,
+        family::AbstractString,
+        variant::AbstractString,
+        on_line::Function,
+        token::BuildCancel,
+    )
     sidecar = get(_FAMILY_SIDECAR, family, nothing)
     sidecar === nothing && return
 
@@ -464,16 +464,16 @@ end
 # fixture is named `<variant>_io.h5`; non-default channel counts get the
 # `_in<N>c` suffix that the test files expect.
 function _dump_variant_fixture!(
-    b::Builder,
-    job::Job,
-    wt::AbstractString,
-    family::AbstractString,
-    sidecar::AbstractString,
-    variant::AbstractString,
-    in_chans::Int,
-    on_line::Function,
-    token::BuildCancel,
-)
+        b::Builder,
+        job::Job,
+        wt::AbstractString,
+        family::AbstractString,
+        sidecar::AbstractString,
+        variant::AbstractString,
+        in_chans::Int,
+        on_line::Function,
+        token::BuildCancel,
+    )
     suffix = in_chans == 3 ? "" : "_in$(in_chans)c"
     fixture = joinpath(b.cfg.parity_dir, "$(variant)$(suffix)_io.h5")
     if !isfile(fixture)
@@ -484,10 +484,10 @@ function _dump_variant_fixture!(
         rc = _stream_subprocess(cmd, env, log_path, on_line, token; cwd = wt)
         rc == 0 || error(
             "parity dump for $family/$variant in_chans=$in_chans " *
-            "failed (rc=$rc); see $log_path",
+                "failed (rc=$rc); see $log_path",
         )
     end
-    _link_fixture_into_worktree(fixture, wt)
+    return _link_fixture_into_worktree(fixture, wt)
 end
 
 # Dump the `features_only` (feature-pyramid) fixture for one variant. Named
@@ -495,14 +495,14 @@ end
 # `run_variant_feature_pyramid_parity`. Families without a pyramid are
 # skipped here rather than in the sidecar, so no subprocess is spawned.
 function _dump_featsonly_fixture!(
-    b::Builder,
-    job::Job,
-    wt::AbstractString,
-    family::AbstractString,
-    variant::AbstractString,
-    on_line::Function,
-    token::BuildCancel,
-)
+        b::Builder,
+        job::Job,
+        wt::AbstractString,
+        family::AbstractString,
+        variant::AbstractString,
+        on_line::Function,
+        token::BuildCancel,
+    )
     family in _FEATSONLY_FAMILIES || return
     fixture = joinpath(b.cfg.parity_dir, "$(variant)_featsonly_io.h5")
     if !isfile(fixture)
@@ -531,7 +531,7 @@ function _link_fixture_into_worktree(fixture::AbstractString, wt::AbstractString
     mkpath(wt_dir)
     dest = joinpath(wt_dir, basename(fixture))
     (isfile(dest) || islink(dest)) && return
-    try
+    return try
         symlink(fixture, dest)
     catch
         cp(fixture, dest; force = true)
@@ -553,9 +553,9 @@ end
 mutable struct _FamilyState
     name::String
     variant::String
-    check_id::Union{Int,Nothing}
+    check_id::Union{Int, Nothing}
     log_path::String
-    log_io::Union{IOStream,Nothing}
+    log_io::Union{IOStream, Nothing}
     completed::Bool
 end
 
@@ -574,7 +574,7 @@ const _MARKER_END_RE = r"^==> JIMM_FAMILY_END: family=(\S+) rc=(\d+)"
 function _start_family_check!(b::Builder, job::Job, st::_FamilyState, on_line::Function)
     st.check_id === nothing || return
     name = check_name(st.name, st.variant)
-    try
+    return try
         check = create_check_run(
             b.gh,
             repo_fullname(b.cfg),
@@ -586,19 +586,19 @@ function _start_family_check!(b::Builder, job::Job, st::_FamilyState, on_line::F
         job.check_runs[st.name] = check.id
         on_line("==> [check-run] $(name) → in_progress (id=$(check.id))")
     catch e
-        @warn "create check_run failed" family=st.name exception=e
+        @warn "create check_run failed" family = st.name exception = e
     end
 end
 
 function _finish_family_check!(
-    b::Builder,
-    job::Job,
-    st::_FamilyState,
-    conclusion::AbstractString;
-    rc::Int = -1,
-    extra_text::AbstractString = "",
-    on_line::Function = identity,
-)
+        b::Builder,
+        job::Job,
+        st::_FamilyState,
+        conclusion::AbstractString;
+        rc::Int = -1,
+        extra_text::AbstractString = "",
+        on_line::Function = identity,
+    )
     st.completed = true
     _close_family_log!(st)
     _start_family_check!(b, job, st, on_line)
@@ -611,7 +611,7 @@ function _finish_family_check!(
         conclusion == "cancelled" ? "cancelled" : conclusion
     summary = if rc >= 0
         "Exit code $(rc). Variant: `$(isempty(st.variant) ? "all" : st.variant)`. " *
-        "Sweep: `$(job.full_sweep)`."
+            "Sweep: `$(job.full_sweep)`."
     else
         "Variant: `$(isempty(st.variant) ? "all" : st.variant)`. Sweep: `$(job.full_sweep)`."
     end
@@ -621,14 +621,14 @@ function _finish_family_check!(
         text = isempty(text) ? extra_text : string(extra_text, "\n\n", text)
         if length(text) > MAX_OUTPUT_TEXT
             head = "[... log truncated ...]\n"
-            tail = text[(end-(MAX_OUTPUT_TEXT-length(head))+1):end]
+            tail = text[(end - (MAX_OUTPUT_TEXT - length(head)) + 1):end]
             text = string(head, tail)
         end
     end
 
     suffix = rc >= 0 ? " (rc=$(rc))" : ""
     on_line("==> [check-run] $(name) → $(conclusion)$(suffix)")
-    try
+    return try
         complete_check_run(
             b.gh,
             repo_fullname(b.cfg),
@@ -641,13 +641,13 @@ function _finish_family_check!(
             ),
         )
     catch e
-        @warn "complete check_run failed" family=st.name conclusion exception=e
+        @warn "complete check_run failed" family = st.name conclusion exception = e
     end
 end
 
 function _open_family_log!(st::_FamilyState)
     mkpath(dirname(st.log_path))
-    st.log_io = open(st.log_path, "w")
+    return st.log_io = open(st.log_path, "w")
 end
 
 function _close_family_log!(st::_FamilyState)
@@ -658,28 +658,28 @@ function _close_family_log!(st::_FamilyState)
         close(io)
     catch
     end
-    st.log_io = nothing
+    return st.log_io = nothing
 end
 
 function _append_family_log!(st::_FamilyState, line::AbstractString)
     io = st.log_io
     io === nothing && return
-    try
+    return try
         println(io, line)
     catch
     end
 end
 
 function _preflight_fixtures!(
-    b::Builder,
-    job::Job,
-    wt::AbstractString,
-    variants::Dict{String,String},
-    on_line::Function,
-    token::BuildCancel,
-)
+        b::Builder,
+        job::Job,
+        wt::AbstractString,
+        variants::Dict{String, String},
+        on_line::Function,
+        token::BuildCancel,
+    )
     ready = String[]
-    failed = Dict{String,String}()
+    failed = Dict{String, String}()
     for family in job.families
         is_cancelled(token) && throw(InterruptException())
         variant = get(variants, family, "")
@@ -699,19 +699,19 @@ function _preflight_fixtures!(
 end
 
 function _run_driver!(
-    b::Builder,
-    job::Job,
-    wt::AbstractString,
-    variants::Dict{String,String},
-    on_line::Function,
-    token::BuildCancel,
-)
+        b::Builder,
+        job::Job,
+        wt::AbstractString,
+        variants::Dict{String, String},
+        on_line::Function,
+        token::BuildCancel,
+    )
     log_dir = joinpath(b.cfg.log_dir, job.head_sha)
     mkpath(log_dir)
 
     ready, preflight_failed = _preflight_fixtures!(b, job, wt, variants, on_line, token)
 
-    state = Dict{String,_FamilyState}()
+    state = Dict{String, _FamilyState}()
     for family in job.families
         state[family] = _FamilyState(family, get(variants, family, ""), log_dir)
     end
@@ -732,7 +732,7 @@ function _run_driver!(
         return
     end
 
-    current = Ref{Union{Nothing,String}}(nothing)
+    current = Ref{Union{Nothing, String}}(nothing)
 
     function on_driver_line(line::AbstractString)
         on_line(line)
@@ -775,20 +775,22 @@ function _run_driver!(
         end
 
         cur = current[]
-        cur !== nothing && haskey(state, cur) && _append_family_log!(state[cur], line)
+        return cur !== nothing && haskey(state, cur) && _append_family_log!(state[cur], line)
     end
 
     driver_log = joinpath(log_dir, "driver.log")
     env = _env_for_run(b.cfg, ready, variants)
-    cmd = Cmd([
-        b.cfg.julia_binary,
-        "--project=.",
-        "-e",
-        "using Pkg; Pkg.instantiate(); include(\"test/_ci_driver.jl\")",
-    ])
+    cmd = Cmd(
+        [
+            b.cfg.julia_binary,
+            "--project=.",
+            "-e",
+            "using Pkg; Pkg.instantiate(); include(\"test/_ci_driver.jl\")",
+        ]
+    )
 
     rc_overall = 1
-    crashed_err::Union{Nothing,String} = nothing
+    crashed_err::Union{Nothing, String} = nothing
     cancelled = false
     try
         rc_overall =
@@ -798,7 +800,7 @@ function _run_driver!(
             cancelled = true
         else
             crashed_err = sprint(showerror, e)
-            @warn "driver subprocess raised" exception=e
+            @warn "driver subprocess raised" exception = e
         end
     end
 
@@ -848,19 +850,19 @@ driven by the `JIMM_FAMILY_BEGIN` / `JIMM_FAMILY_END` markers the driver
 emits. Cancellation is honored via `token` (see `BuildCancel`).
 """
 function run_job(
-    builder::Builder,
-    job::Job;
-    on_line::Function = identity,
-    token::BuildCancel = BuildCancel(),
-)
+        builder::Builder,
+        job::Job;
+        on_line::Function = identity,
+        token::BuildCancel = BuildCancel(),
+    )
     on_line(
         "==> starting $(job.label) sha=$(job.head_sha) " *
-        "families=$(join(job.families, ",")) sweep=$(job.full_sweep)",
+            "families=$(join(job.families, ",")) sweep=$(job.full_sweep)",
     )
     _ensure_mirror!(builder)
     wt = _make_worktree!(builder, job.head_sha)
     try
-        variants = Dict{String,String}()
+        variants = Dict{String, String}()
         for family in job.families
             variants[family] = job.full_sweep ? "" : get(REPRESENTATIVE_VARIANT, family, "")
         end

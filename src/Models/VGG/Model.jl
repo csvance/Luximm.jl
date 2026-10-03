@@ -148,12 +148,12 @@ attached and the forward returns logits `(num_classes, N)`, matching
 `timm.forward(x)`.
 """
 function vgg(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     # No pyramid yet: the conv stack is one flat Chain, so tapping at the
     # pool boundaries means splitting it into per-stage sub-chains and
     # reworking `vgg_mapping` / `vgg_state_mapping` for the nested paths.
@@ -161,12 +161,12 @@ function vgg(
     cfg = get(VGG_VARIANTS, variant) do
         error(
             "Unknown VGG variant: $variant. Known variants: " *
-            "$(sort(collect(keys(VGG_VARIANTS))))",
+                "$(sort(collect(keys(VGG_VARIANTS))))",
         )
     end
     plan = _vgg_feature_plan(cfg.cfg, cfg.batch_norm, in_chans)
 
-    if num_classes == 0
+    return if num_classes == 0
         @compact(features = _vgg_build_features(plan, cfg.batch_norm)) do x
             @return _vgg_features(x, features)
         end
@@ -190,7 +190,7 @@ end
 
 # -- Pretrained-weight loading -------------------------------------------
 
-_VGG_MAPPING_ENTRY = Tuple{String,Tuple{Vararg{Symbol}},Function}
+_VGG_MAPPING_ENTRY = Tuple{String, Tuple{Vararg{Symbol}}, Function}
 
 """
     vgg_mapping(state_dict, variant; load_classifier=false, in_chans=3,
@@ -207,16 +207,16 @@ BatchNorm running statistics (for `_bn` variants) are state, not params; use
 `pre_logits.*` and `head.fc.*` keys are included.
 """
 function vgg_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(VGG_VARIANTS, variant) do
         error(
             "Unknown VGG variant: $variant. Known variants: " *
-            "$(sort(collect(keys(VGG_VARIANTS))))",
+                "$(sort(collect(keys(VGG_VARIANTS))))",
         )
     end
     mapping = _VGG_MAPPING_ENTRY[]
@@ -294,14 +294,14 @@ Build the BatchNorm running-statistics state mapping for a `_bn` VGG variant.
 Returns an empty mapping for the plain (non-BatchNorm) variants.
 """
 function vgg_state_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(VGG_VARIANTS, variant) do
         error(
             "Unknown VGG variant: $variant. Known variants: " *
-            "$(sort(collect(keys(VGG_VARIANTS))))",
+                "$(sort(collect(keys(VGG_VARIANTS))))",
         )
     end
     mapping = _VGG_MAPPING_ENTRY[]
@@ -351,22 +351,22 @@ Three classifier-head cases mirror the other families:
   is left at its `Lux.setup` random initialization.
 """
 function _load_vgg(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = VGG_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the pre_logits + classifier head are left at their Lux.setup random " *
-              "initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the pre_logits + classifier head are left at their Lux.setup random " *
+            "initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

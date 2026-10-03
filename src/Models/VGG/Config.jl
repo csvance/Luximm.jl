@@ -72,7 +72,7 @@ Lookup table for the VGG variants ported from timm: the four classic depths
 checkpoints. Keys are the timm model name with the dot rewritten as an
 underscore.
 """
-const VGG_VARIANTS = Dict{Symbol,VGGVariant}(
+const VGG_VARIANTS = Dict{Symbol, VGGVariant}(
     :vgg11_tv_in1k =>
         VGGVariant(:vgg11_tv_in1k, _VGG_CFG_A, false, "timm/vgg11.tv_in1k", 1000, 224),
     :vgg13_tv_in1k =>

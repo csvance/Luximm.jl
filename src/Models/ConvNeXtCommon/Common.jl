@@ -34,7 +34,7 @@
 const _CN_INIT = truncated_normal(; mean = 0.0f0, std = 0.02f0)
 
 # Mapping entry type alias shared by both family-level mapping builders.
-const _CN_MAPPING_ENTRY = Tuple{String,Tuple{Vararg{Symbol}},Function}
+const _CN_MAPPING_ENTRY = Tuple{String, Tuple{Vararg{Symbol}}, Function}
 
 """
     convnext_downsample(in_C, out_C) -> @compact block
@@ -45,7 +45,7 @@ followed by `Conv((2,2), in_C => out_C; stride=2, bias)`. Matches timm's
 conv ordering required for parity.
 """
 function convnext_downsample(in_C::Int, out_C::Int)
-    @compact(
+    return @compact(
         norm = layernorm2d(in_C),
         conv = Conv(
             (2, 2),
@@ -78,7 +78,7 @@ stride-1 stages and `(:stage{i}, :blocks, :layer_{j})` for stride-2
 stages. See [`convnext_stage_block_path`](@ref).
 """
 function convnext_stage(block_ctor, in_C::Int, out_C::Int, depth::Int, stride::Int)
-    blocks = [block_ctor(out_C) for _ = 1:depth]
+    blocks = [block_ctor(out_C) for _ in 1:depth]
     if stride == 1
         return Chain(blocks...)
     else
@@ -139,11 +139,11 @@ stage's downsample (`downsample.0` = LayerNorm2d, `downsample.1` = Conv) to
 `py_stage` is the PyTorch-side prefix (e.g. `"stages.1"`).
 """
 function push_downsample_mapping!(
-    mapping::Vector,
-    prefix::Tuple{Vararg{Symbol}},
-    stage_sym::Symbol,
-    py_stage::String,
-)
+        mapping::Vector,
+        prefix::Tuple{Vararg{Symbol}},
+        stage_sym::Symbol,
+        py_stage::String,
+    )
     push!(
         mapping,
         (

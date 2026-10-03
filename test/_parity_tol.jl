@@ -15,7 +15,7 @@ const FEATURES_RTOL = 1.0f-4
 # override widens the bar only for these paths; it is evidence-based, not a
 # blanket relaxation — the variant's logits sub-test still holds the model to
 # the tight absolute bar.
-const FEATURE_RTOL_OVERRIDES = Dict{Symbol,Float32}(
+const FEATURE_RTOL_OVERRIDES = Dict{Symbol, Float32}(
     # ViT-L/14 CLIP: 24 pre-norm blocks; in1c features measured 9.3e-5 .. 1.1e-4.
     :vit_large_patch14_clip_224_openai_ft_in1k => 2.0f-4,
 )

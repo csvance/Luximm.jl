@@ -20,15 +20,15 @@ include("Config.jl")
 # One SE-bottleneck block. `plane_ch` is the bottleneck width; the block output
 # is `4 * plane_ch`. `downsample` adds the 1x1-conv + BN projection shortcut.
 function seresnet_bottleneck_block(
-    in_ch::Int,
-    plane_ch::Int,
-    stride::Int;
-    downsample::Bool,
-    reduction::Int,
-)
+        in_ch::Int,
+        plane_ch::Int,
+        stride::Int;
+        downsample::Bool,
+        reduction::Int,
+    )
     out_ch = 4 * plane_ch
     se = se_block(out_ch; rd_ratio = 1 // reduction)
-    if downsample
+    return if downsample
         @compact(
             conv1 = Conv(
                 (1, 1),
@@ -129,12 +129,12 @@ function seresnet_bottleneck_block(
 end
 
 function seresnet_stage(
-    in_ch::Int,
-    plane_ch::Int,
-    depth::Int,
-    stride::Int,
-    reduction::Int,
-)
+        in_ch::Int,
+        plane_ch::Int,
+        depth::Int,
+        stride::Int,
+        reduction::Int,
+    )
     out_ch = 4 * plane_ch
     blocks = []
     push!(
@@ -147,7 +147,7 @@ function seresnet_stage(
             reduction = reduction,
         ),
     )
-    for _ = 2:depth
+    for _ in 2:depth
         push!(
             blocks,
             seresnet_bottleneck_block(
@@ -201,7 +201,7 @@ function _seresnet_backbone(cfg::SEResNetVariant, in_chans::Int, out_sel)
     planes = cfg.planes
     red = cfg.se_reduction
     stage_chs = ntuple(i -> 4 * planes[i], 4)
-    @compact(
+    return @compact(
         conv1 = Conv(
             (7, 7),
             in_chans => 64;
@@ -234,16 +234,16 @@ With `features_only = true` the forward returns a tuple of intermediate
 feature maps; see [`feature_info`](@ref) and [`create_model`](@ref).
 """
 function seresnet(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     cfg = get(SERESNET_VARIANTS, variant) do
         error(
             "Unknown SE-ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(SERESNET_VARIANTS))))",
+                "$(sort(collect(keys(SERESNET_VARIANTS))))",
         )
     end
     depths = cfg.layers
@@ -257,7 +257,7 @@ function seresnet(
     end
     _check_out_indices_unused(variant, out_indices)
 
-    if num_classes == 0
+    return if num_classes == 0
         _seresnet_backbone(cfg, in_chans, last)
     else
         nc = num_classes
@@ -293,16 +293,16 @@ end
 _seresnet_block_has_downsample(block::Int) = block == 1
 
 function seresnet_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(SERESNET_VARIANTS, variant) do
         error(
             "Unknown SE-ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(SERESNET_VARIANTS))))",
+                "$(sort(collect(keys(SERESNET_VARIANTS))))",
         )
     end
     mapping = _RESNET_MAPPING_ENTRY[]
@@ -312,7 +312,7 @@ function seresnet_mapping(
     _push_resnet_bn_param_mapping!(mapping, "bn1", (prefix..., :bn1))
 
     for (stage, depth) in enumerate(cfg.layers)
-        for block = 1:depth
+        for block in 1:depth
             block_path = _resnet_block_path(stage, block)
             py_block = "layer$(stage).$(block - 1)"
             push!(
@@ -418,20 +418,20 @@ function seresnet_mapping(
 end
 
 function seresnet_state_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(SERESNET_VARIANTS, variant) do
         error(
             "Unknown SE-ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(SERESNET_VARIANTS))))",
+                "$(sort(collect(keys(SERESNET_VARIANTS))))",
         )
     end
     mapping = _RESNET_MAPPING_ENTRY[]
     _push_resnet_bn_state_mapping!(mapping, "bn1", (prefix..., :bn1))
     for (stage, depth) in enumerate(cfg.layers)
-        for block = 1:depth
+        for block in 1:depth
             block_path = _resnet_block_path(stage, block)
             py_block = "layer$(stage).$(block - 1)"
             _push_resnet_bn_state_mapping!(
@@ -475,21 +475,21 @@ BatchNorm running statistics into `st`. The classifier-head handling matches
 the ResNet loader's three cases.
 """
 function _load_seresnet(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = SERESNET_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the classifier head is left at its Lux.setup random initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the classifier head is left at its Lux.setup random initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

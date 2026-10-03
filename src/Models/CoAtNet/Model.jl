@@ -53,17 +53,17 @@ _coat_avgpool(x) = NNlib.meanpool(x, (2, 2); stride = 2, pad = 0)
 # Shared MBConv main-path body. `pool_down`/`attn_early` are build-time
 # constants. `attn_early` places SE before norm2 (vs after).
 function _coat_mbconv_main(
-    x,
-    pool_down::Bool,
-    attn_early::Bool,
-    pre_norm,
-    conv1,
-    norm1,
-    conv2,
-    se,
-    norm2,
-    conv3,
-)
+        x,
+        pool_down::Bool,
+        attn_early::Bool,
+        pre_norm,
+        conv1,
+        norm1,
+        conv2,
+        se,
+        norm2,
+        conv3,
+    )
     h = pre_norm(x)
     pool_down && (h = _coat_avgpool(h))
     h = norm1(conv1(h))
@@ -82,19 +82,19 @@ end
 # `shortcut_expand` conv **only when `in_ch != out_ch`** (otherwise the channel
 # count already matches and timm uses an Identity expand — no weight).
 function coatnet_mbconv_block(
-    in_ch::Int,
-    out_ch::Int,
-    stride::Int;
-    stride_mode::Symbol,
-    attn_early::Bool,
-    se_act,
-)
+        in_ch::Int,
+        out_ch::Int,
+        stride::Int;
+        stride_mode::Symbol,
+        attn_early::Bool,
+        se_act,
+    )
     mid = se_make_divisible(in_ch * 4.0)
     rd = floor(Int, 0.25 * mid)
     se = se_block(mid; rd_channels = rd, act = se_act)
     pool_down = stride_mode === :pool && stride == 2
     conv2_stride = (stride_mode === :dw && stride == 2) ? 2 : 1
-    if stride == 2 && in_ch != out_ch
+    return if stride == 2 && in_ch != out_ch
         @compact(
             shortcut_expand = _coat_conv(in_ch, out_ch, 1),
             pre_norm = _coat_bn(in_ch),
@@ -157,16 +157,16 @@ _coat_mlp_conv(in_ch, out_ch) = Conv(
 # them from the checkpoint only when the variant uses LayerScale, so a fixed
 # `@compact` field set covers both cases.
 function coatnet_transformer_block(
-    in_ch::Int,
-    out_ch::Int,
-    stride::Int,
-    window::Tuple{Int,Int};
-    shortcut_bias::Bool,
-)
+        in_ch::Int,
+        out_ch::Int,
+        stride::Int,
+        window::Tuple{Int, Int};
+        shortcut_bias::Bool,
+    )
     hidden = out_ch * 4
     attn = rel_pos_attention(in_ch, out_ch; dim_head = 32, window = window)
     _ls(g) = reshape(g, 1, 1, :, 1)
-    if stride == 2
+    return if stride == 2
         @compact(
             shortcut_expand = Conv(
                 (1, 1),
@@ -210,7 +210,7 @@ function coatnet_stage(cfg::CoAtNetVariant, block_type::Symbol, in_ch::Int, out_
     window = (feat, feat)
     se_act = cfg.se_act === :silu ? NNlib.swish : NNlib.relu
     blocks = []
-    for b = 1:depth
+    for b in 1:depth
         stride = b == 1 ? 2 : 1
         ic = b == 1 ? in_ch : out_ch
         if block_type === :C
@@ -242,16 +242,16 @@ function coatnet_stage(cfg::CoAtNetVariant, block_type::Symbol, in_ch::Int, out_
 end
 
 function _coatnet_features(
-    x,
-    stem_conv1,
-    stem_norm1,
-    stem_conv2,
-    stage1,
-    stage2,
-    stage3,
-    stage4,
-    norm,
-)
+        x,
+        stem_conv1,
+        stem_norm1,
+        stem_conv2,
+        stage1,
+        stage2,
+        stage3,
+        stage4,
+        norm,
+    )
     x = stem_conv2(stem_norm1(stem_conv1(x)))
     x = stage1(x)
     x = stage2(x)
@@ -275,12 +275,12 @@ The input spatial size must equal the variant's native `img_size`; the
 transformer relative-position bias is sized to the per-stage feature map.
 """
 function coatnet(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     # No pyramid yet. The stage layout would support one, but the
     # relative-position bias pins the input to the variant's native
     # `img_size`, which makes CoAtNet a poor dense-prediction encoder.
@@ -288,7 +288,7 @@ function coatnet(
     cfg = get(COATNET_VARIANTS, variant) do
         error(
             "Unknown CoAtNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(COATNET_VARIANTS))))",
+                "$(sort(collect(keys(COATNET_VARIANTS))))",
         )
     end
     dims = cfg.dims
@@ -299,7 +299,7 @@ function coatnet(
     img = cfg.img_size
     in_for = (sw[2], dims[1], dims[2], dims[3])   # stage input channels
 
-    if num_classes == 0
+    return if num_classes == 0
         @compact(
             stem_conv1 = _coat_conv(in_chans, sw[1], 3; stride = 2),
             stem_norm1 = _coat_bn(sw[1]),
@@ -359,16 +359,16 @@ end
 
 # -- Pretrained-weight loading -------------------------------------------
 
-_COAT_MAPPING_ENTRY = Tuple{String,Tuple{Vararg{Symbol}},Function}
+_COAT_MAPPING_ENTRY = Tuple{String, Tuple{Vararg{Symbol}}, Function}
 
 # Append BN param (scale/bias) or LayerNorm2d (scale/bias via as_channel4d).
 function _coat_push_bn!(mapping, py, lux)
     push!(mapping, ("$(py).weight", (lux..., :scale), identity))
-    push!(mapping, ("$(py).bias", (lux..., :bias), identity))
+    return push!(mapping, ("$(py).bias", (lux..., :bias), identity))
 end
 function _coat_push_ln!(mapping, py, lux)
     push!(mapping, ("$(py).weight", (lux..., :scale), as_channel4d))
-    push!(mapping, ("$(py).bias", (lux..., :bias), as_channel4d))
+    return push!(mapping, ("$(py).bias", (lux..., :bias), as_channel4d))
 end
 
 function _coat_push_mbconv!(mapping, py, lux, downsample::Bool, has_expand::Bool, attn_early::Bool)
@@ -385,18 +385,18 @@ function _coat_push_mbconv!(mapping, py, lux, downsample::Bool, has_expand::Bool
     push!(mapping, ("$(py).$(se_key).fc2.weight", (lux..., :se, :fc2, :weight), identity))
     push!(mapping, ("$(py).$(se_key).fc2.bias", (lux..., :se, :fc2, :bias), identity))
     _coat_push_bn!(mapping, "$(py).norm2", (lux..., :norm2))
-    push!(mapping, ("$(py).conv3_1x1.weight", (lux..., :conv3, :weight), identity))
+    return push!(mapping, ("$(py).conv3_1x1.weight", (lux..., :conv3, :weight), identity))
 end
 
 function _coat_push_transformer!(
-    mapping,
-    py,
-    lux,
-    downsample::Bool,
-    has_expand::Bool,
-    shortcut_bias::Bool,
-    layer_scale::Bool,
-)
+        mapping,
+        py,
+        lux,
+        downsample::Bool,
+        has_expand::Bool,
+        shortcut_bias::Bool,
+        layer_scale::Bool,
+    )
     if downsample
         if has_expand
             push!(mapping, ("$(py).shortcut.expand.weight", (lux..., :shortcut_expand, :weight), identity))
@@ -428,7 +428,7 @@ function _coat_push_transformer!(
     push!(mapping, ("$(py).mlp.fc1.bias", (lux..., :mlp_fc1, :bias), identity))
     push!(mapping, ("$(py).mlp.fc2.weight", (lux..., :mlp_fc2, :weight), identity))
     push!(mapping, ("$(py).mlp.fc2.bias", (lux..., :mlp_fc2, :bias), identity))
-    if layer_scale
+    return if layer_scale
         push!(mapping, ("$(py).ls2.gamma", (lux..., :ls2_gamma), identity))
     end
 end
@@ -442,16 +442,16 @@ Build the `(pytorch_key, lux_path, transform)` triples mapping a timm
 running statistics are state, not params; use [`coatnet_state_mapping`](@ref).
 """
 function coatnet_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(COATNET_VARIANTS, variant) do
         error(
             "Unknown CoAtNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(COATNET_VARIANTS))))",
+                "$(sort(collect(keys(COATNET_VARIANTS))))",
         )
     end
     mapping = _COAT_MAPPING_ENTRY[]
@@ -466,7 +466,7 @@ function coatnet_mapping(
         stage_sym = Symbol("stage", s)
         bt = cfg.block_types[s]
         has_expand = stage_in[s] != cfg.dims[s]   # Downsample2d expand conv present?
-        for b = 1:depth
+        for b in 1:depth
             lux = (prefix..., stage_sym, Symbol("layer_", b))
             py = "stages.$(s - 1).blocks.$(b - 1)"
             downsample = b == 1
@@ -507,14 +507,14 @@ Build the BatchNorm running-statistics state mapping (stem + MBConv stages).
 The transformer stages use LayerNorm and contribute no state.
 """
 function coatnet_state_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(COATNET_VARIANTS, variant) do
         error(
             "Unknown CoAtNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(COATNET_VARIANTS))))",
+                "$(sort(collect(keys(COATNET_VARIANTS))))",
         )
     end
     mapping = _COAT_MAPPING_ENTRY[]
@@ -527,7 +527,7 @@ function coatnet_state_mapping(
     for (s, depth) in enumerate(cfg.depths)
         cfg.block_types[s] === :C || continue
         stage_sym = Symbol("stage", s)
-        for b = 1:depth
+        for b in 1:depth
             lux = (prefix..., stage_sym, Symbol("layer_", b))
             py = "stages.$(s - 1).blocks.$(b - 1)"
             push_state("$(py).pre_norm", (lux..., :pre_norm))
@@ -552,21 +552,21 @@ Private back-end for `create_pretrained` on CoAtNet variants. Loads the timm
 statistics into `st`. The classifier-head handling matches the other families.
 """
 function _load_coatnet(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = COATNET_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the classifier head is left at its Lux.setup random initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the classifier head is left at its Lux.setup random initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

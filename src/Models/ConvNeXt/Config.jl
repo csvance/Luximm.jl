@@ -45,8 +45,8 @@ Fields:
 """
 struct ConvNeXtVariant
     name::Symbol
-    depths::NTuple{4,Int}
-    dims::NTuple{4,Int}
+    depths::NTuple{4, Int}
+    dims::NTuple{4, Int}
     hf_repo::String
     default_num_classes::Int
     default_input_size::Int
@@ -80,7 +80,7 @@ DINOv3 encoders and the Facebook AI checkpoints from the original
 ConvNeXt paper. Additional `convnext_*` lineages (`.in12k_*`, `.clip_*`)
 can be registered without touching the constructor or mapping code.
 """
-const CONVNEXT_VARIANTS = Dict{Symbol,ConvNeXtVariant}(
+const CONVNEXT_VARIANTS = Dict{Symbol, ConvNeXtVariant}(
     # Meta DINOv3 encoders (no usable head).
     :convnext_tiny_dinov3_lvd1689m => ConvNeXtVariant(
         :convnext_tiny_dinov3_lvd1689m,

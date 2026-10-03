@@ -28,20 +28,20 @@ mutable struct GitHubApp
     app_id::Int
     installation_id::Int
     private_key::String
-    token::Union{String,Nothing}
+    token::Union{String, Nothing}
     token_exp::Float64
     lock::ReentrantLock
 end
 
 GitHubApp(app_id::Integer, installation_id::Integer, private_key::AbstractString) =
     GitHubApp(
-        Int(app_id),
-        Int(installation_id),
-        String(private_key),
-        nothing,
-        0.0,
-        ReentrantLock(),
-    )
+    Int(app_id),
+    Int(installation_id),
+    String(private_key),
+    nothing,
+    0.0,
+    ReentrantLock(),
+)
 
 # ── Auth ──────────────────────────────────────────────────────────────
 
@@ -93,15 +93,15 @@ function _auth_headers(gh::GitHubApp; extra = ())
 end
 
 function _request(
-    gh::GitHubApp,
-    method::AbstractString,
-    path::AbstractString;
-    body = nothing,
-    query = nothing,
-)
+        gh::GitHubApp,
+        method::AbstractString,
+        path::AbstractString;
+        body = nothing,
+        query = nothing,
+    )
     url = startswith(path, "http") ? path : string(API, path)
     headers = _auth_headers(gh)
-    opts = Dict{Symbol,Any}(:headers => headers, :status_exception => false)
+    opts = Dict{Symbol, Any}(:headers => headers, :status_exception => false)
     if body !== nothing
         opts[:body] = JSON3.write(body)
         push!(headers, "Content-Type" => "application/json")
@@ -147,11 +147,11 @@ function _next_link(r::HTTP.Response)
 end
 
 function _paginated(
-    gh::GitHubApp,
-    path::AbstractString;
-    per_page::Int = 100,
-    max_pages::Int = 20,
-)
+        gh::GitHubApp,
+        path::AbstractString;
+        per_page::Int = 100,
+        max_pages::Int = 20,
+    )
     sep = occursin('?', path) ? '&' : '?'
     url = string(path, sep, "per_page=", per_page)
     out = Any[]
@@ -172,16 +172,16 @@ end
 # ── Checks API ────────────────────────────────────────────────────────
 
 function create_check_run(
-    gh::GitHubApp,
-    repo::AbstractString,
-    head_sha::AbstractString,
-    name::AbstractString;
-    status::AbstractString = "in_progress",
-    conclusion::Union{Nothing,AbstractString} = nothing,
-    details_url::Union{Nothing,AbstractString} = nothing,
-    output = nothing,
-)
-    body = Dict{String,Any}("name" => name, "head_sha" => head_sha, "status" => status)
+        gh::GitHubApp,
+        repo::AbstractString,
+        head_sha::AbstractString,
+        name::AbstractString;
+        status::AbstractString = "in_progress",
+        conclusion::Union{Nothing, AbstractString} = nothing,
+        details_url::Union{Nothing, AbstractString} = nothing,
+        output = nothing,
+    )
+    body = Dict{String, Any}("name" => name, "head_sha" => head_sha, "status" => status)
     conclusion === nothing || (body["conclusion"] = conclusion)
     details_url === nothing || (body["details_url"] = details_url)
     output === nothing || (body["output"] = output)
@@ -196,13 +196,13 @@ function create_check_run(
 end
 
 function complete_check_run(
-    gh::GitHubApp,
-    repo::AbstractString,
-    check_run_id::Integer;
-    conclusion::AbstractString,
-    output = nothing,
-)
-    body = Dict{String,Any}("status" => "completed", "conclusion" => conclusion)
+        gh::GitHubApp,
+        repo::AbstractString,
+        check_run_id::Integer;
+        conclusion::AbstractString,
+        output = nothing,
+    )
+    body = Dict{String, Any}("status" => "completed", "conclusion" => conclusion)
     output === nothing || (body["output"] = output)
     _request(gh, "PATCH", "/repos/$repo/check-runs/$check_run_id"; body = body)
     return nothing
@@ -212,11 +212,11 @@ end
 
 """Return the list of changed file paths between `base` and `head`."""
 function compare(
-    gh::GitHubApp,
-    repo::AbstractString,
-    base::AbstractString,
-    head::AbstractString,
-)
+        gh::GitHubApp,
+        repo::AbstractString,
+        base::AbstractString,
+        head::AbstractString,
+    )
     r = _request(gh, "GET", "/repos/$repo/compare/$base...$head")
     data = JSON3.read(String(r.body))
     files = get(data, "files", nothing)
@@ -225,10 +225,10 @@ function compare(
 end
 
 function get_default_branch_head(
-    gh::GitHubApp,
-    repo::AbstractString,
-    branch::AbstractString = "master",
-)
+        gh::GitHubApp,
+        repo::AbstractString,
+        branch::AbstractString = "master",
+    )
     r = _request(gh, "GET", "/repos/$repo/branches/$branch")
     data = JSON3.read(String(r.body))
     return String(data["commit"]["sha"])
@@ -243,11 +243,11 @@ List commits on `sha` (branch or commit) committed at or after `since`,
 where `since` is an ISO-8601 timestamp (e.g. `2026-04-20T00:00:00Z`).
 """
 function list_commits(
-    gh::GitHubApp,
-    repo::AbstractString;
-    sha::AbstractString,
-    since::AbstractString,
-)
+        gh::GitHubApp,
+        repo::AbstractString;
+        sha::AbstractString,
+        since::AbstractString,
+    )
     return _paginated(gh, "/repos/$repo/commits?sha=$sha&since=$since")
 end
 
@@ -270,6 +270,7 @@ function list_check_runs(gh::GitHubApp, repo::AbstractString, ref::AbstractStrin
         page += 1
         page > 20 && return out
     end
+    return
 end
 
 end # module

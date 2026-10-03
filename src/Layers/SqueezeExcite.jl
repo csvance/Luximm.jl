@@ -43,14 +43,14 @@ PyTorch keys `<prefix>.fc1.weight/bias` and `<prefix>.fc2.weight/bias` map to
 the `:fc1` / `:fc2` Conv leaves with the `identity` transform.
 """
 function se_block(
-    C::Int;
-    rd_ratio::Real = 1 // 16,
-    rd_divisor::Int = 8,
-    rd_channels::Union{Nothing,Int} = nothing,
-    act = NNlib.relu,
-)
+        C::Int;
+        rd_ratio::Real = 1 // 16,
+        rd_divisor::Int = 8,
+        rd_channels::Union{Nothing, Int} = nothing,
+        act = NNlib.relu,
+    )
     rd = rd_channels === nothing ? se_make_divisible(C * rd_ratio, rd_divisor) : rd_channels
-    @compact(
+    return @compact(
         fc1 = Conv(
             (1, 1),
             C => rd;
