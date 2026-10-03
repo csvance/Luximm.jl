@@ -1,0 +1,45 @@
+# Runic formatting check: every .jl file in the repo must be Runic-formatted. Run
+# `runic -i src test docs ci utils` locally (see CLAUDE.md) and commit the result;
+# this check fails with a diff until the whole tree is formatted.
+name: Format
+
+# An allowlist, because Runic formats `.jl` and nothing else, so a change that
+# adds no Julia cannot break the check. `**/*.jl` is every tracked Julia file at
+# any depth, a superset of the directories the local pre-commit hook formats.
+# Repeated for push and pull_request: the workflow parser does not resolve YAML
+# anchors.
+on:
+  push:
+    branches: [master]
+    paths:
+      - '**/*.jl'
+      - '.github/workflows/format.yml'
+  pull_request:
+    paths:
+      - '**/*.jl'
+      - '.github/workflows/format.yml'
+
+concurrency:
+  group: format-${{ github.ref }}
+  cancel-in-progress: true
+
+# actions: write is needed because julia-actions/cache prunes its own old caches.
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  runic:
+    name: Runic formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v2
+      - uses: fredrikekre/runic-action@v1
+        with:
+          # Keep in sync with the local `runic` CLI (`runic --version`):
+          #   julia -e 'using Pkg; Pkg.Apps.add("Runic")'
+          version: '1.11'

@@ -13,6 +13,12 @@ After editing Julia code, run `runic -i` on the touched files (or at minimum ver
 Runic style — let the tool do it. Likewise, do not use JuliaFormatter-based tooling
 (including the Kaimon `format_code` tool); `runic` is the canonical formatter here.
 
+CI enforces this: `.github/workflows/format.yml` runs Runic 1.11 over every `.jl` file
+and fails on any diff. Keep its `version` in sync with the local `runic --version`.
+`scripts/pre-commit-runic` formats `src test docs ci utils` and re-stages the result on
+every commit; install it in a fresh clone with
+`cp scripts/pre-commit-runic .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`.
+
 ## After any non-trivial change, check these two files
 
 1. **`README.md`** — the README enumerates supported backbones, families, and variant counts. After adding, removing, or renaming a model family, variant, or top-level public API, re-read README.md and update any list, table, or example that drifted. A change is "non-trivial" if a reader looking at README.md would now see something that is no longer true.
