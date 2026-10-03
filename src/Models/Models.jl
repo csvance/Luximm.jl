@@ -51,7 +51,21 @@ ps, st = Lux.setup(rng, model)        # random init, ready for training
 ```
 
 `kwargs` are forwarded to the family constructor (`in_chans`,
-`num_classes`, `features_only`, `out_indices`).
+`num_classes`, `features_only`, `out_indices`, and family-specific
+keywords such as `conv_mlp` below).
+
+# ConvNeXt block layout
+
+ConvNeXt and ConvNeXt V2 accept `conv_mlp::Bool = false`. `false` builds
+timm's default `conv_mlp = False` block: LayerNorm over a contiguous channel
+axis and the pointwise layers as GEMMs, which is faster. `true` builds the
+1x1-convolution block in channels-first layout, the only layout before
+v0.3.0. The two layouts have the same parameter tree, so pretrained weights
+and saved checkpoints load into either:
+
+```julia
+model = create_model(:convnextv2_tiny_fcmae; conv_mlp = true)   # pre-0.3 layout
+```
 
 # Feature-pyramid mode
 
@@ -228,8 +242,8 @@ pair the caller produced with `Lux.setup`. The closure captures
 construction time, so calling it is the only place `(ps, st)` need to
 be threaded.
 Any other keyword goes to the family constructor through
-[`create_model`](@ref) (e.g. `conv_mlp = false` for a ConvNeXtV2); it
-shapes the model, never the weights the closure loads.
+[`create_model`](@ref) (e.g. `conv_mlp = true` for the pre-0.3 ConvNeXt
+block layout); it shapes the model, never the weights the closure loads.
 
 ```julia
 model, load = create_pretrained(:resnet50_a1_in1k)

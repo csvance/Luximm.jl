@@ -141,6 +141,10 @@ CONVNEXT_VARIANTS
     Apache 2.0. The Facebook AI `.fb_*` checkpoints carry the upstream
     Apache 2.0 license and are unaffected.
 
+Both ConvNeXt families take `conv_mlp::Bool = false`, which selects the
+block layout; see [`create_model`](@ref) and
+[ConvNeXt block layout](../getting_started.md#ConvNeXt-block-layout).
+
 ### Registered variants
 
 ```@eval
