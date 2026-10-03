@@ -20,12 +20,14 @@
 #     v2 and so that non-DINO v1 checkpoints can be added later.
 #
 # timm v1 with `conv_mlp=False` stores the MLP as two `nn.Linear` layers in
-# channels-last space, but that is mathematically identical to two 1x1 convs
-# in NCHW. We build the Julia model with 1x1 `Conv` layers (the v2 path) and
-# reshape the 2D Linear weights to 4D at load time via `_linear_to_conv1x1`.
-# This keeps the forward pass autodiff- and GPU-friendly, avoids explicit
-# permutes inside `@compact`, and lets us share the stem / downsample / stage
-# helpers with v2 through `../ConvNeXtCommon/Common.jl`.
+# channels-last space, which is mathematically identical to two 1x1 convs in
+# NCHW. The parameters are 1x1 `Conv` layers either way, and the 2D Linear
+# weights are reshaped to 4D at load time via `_linear_to_conv1x1`. The default
+# block, `convnext_block_cl`, computes in timm's channels-last layout (LayerNorm
+# over a contiguous channel axis, the 1x1 convs as GEMMs); `conv_mlp = true`
+# selects `convnext_block`, which computes them as 1x1 convs in WHCN. Both share
+# the stem / downsample / stage helpers with v2 through
+# `../ConvNeXtCommon/Common.jl`.
 #
 # `num_classes = 0` returns the post-stage4 feature map (shape
 # `(W/32, H/32, dims[4], N)`), matching `timm.forward_features(x)`.
@@ -91,13 +93,84 @@ function convnext_block(
     end
 end
 
+"""
+    convnext_block_cl(C; mlp_ratio = 4, kernel = 7, ls_init) -> @compact block
+
+`convnext`'s default block, timm's `conv_mlp = False` layout: after the depthwise convolution,
+channels move to the contiguous axis, so the LayerNorm is a contiguous row reduction, the two
+pointwise layers are plain matrix multiplies, and LayerScale scales the contiguous axis.
+
+    x (W, H, C, N) → conv_dw → permute to (C, W, H, N) → LayerNorm over dim 1 → fc1 as GEMM
+      → GELU → fc2 as GEMM → × gamma → permute back → + x
+
+Declares exactly the layers and parameters of `convnext_block` and reads them directly, so the
+parameter tree, and the pretrained weights, are the same, as are the outputs (to Float32
+rounding). A 1x1 convolution's `(1, 1, in, out)` kernel is the `(in, out)` matrix of the GEMM.
+"""
+function convnext_block_cl(
+        C::Int;
+        mlp_ratio::Int = 4,
+        kernel::Int = 7,
+        ls_init::Float32 = _CN_V1_LS_INIT,
+    )
+    H = mlp_ratio * C
+    return @compact(
+        conv_dw = Conv(
+            (kernel, kernel),
+            C => C;
+            groups = C,
+            pad = kernel ÷ 2,
+            use_bias = true,
+            cross_correlation = true,
+            init_weight = _CN_INIT,
+            init_bias = zeros32,
+        ),
+        norm = layernorm2d(C),
+        fc1 = Conv(
+            (1, 1),
+            C => H;
+            use_bias = true,
+            cross_correlation = true,
+            init_weight = _CN_INIT,
+            init_bias = zeros32,
+        ),
+        fc2 = Conv(
+            (1, 1),
+            H => C;
+            use_bias = true,
+            cross_correlation = true,
+            init_weight = _CN_INIT,
+            init_bias = zeros32,
+        ),
+        gamma = fill(ls_init, C),
+    ) do x
+        # `C` and `H` are captured by the closure, not passed to @compact, which would put them in
+        # the state tree and break its identity with `convnext_block`.
+        y = conv_dw(x)                                       # (W, H, C, N)
+        w, h, _, n = size(y)
+        y = permutedims(y, (3, 1, 2, 4))                     # (C, W, H, N)
+        # layernorm2d's LayerNorm, over the now contiguous channel axis; its eps is 1f-6.
+        y = Lux.LuxLib.layernorm(
+            y, reshape(norm.ps.scale, C, 1, 1, 1),
+            reshape(norm.ps.bias, C, 1, 1, 1), identity, 1, 1.0f-6
+        )
+        y = reshape(fc1.ps.weight, C, H)' * reshape(y, C, :) .+ fc1.ps.bias   # (H, W*H*N)
+        y = NNlib.gelu_erf.(y)                               # exact GELU, as in convnext_block
+        y = (reshape(fc2.ps.weight, H, C)' * y .+ fc2.ps.bias) .* gamma      # (C, W*H*N)
+        @return permutedims(reshape(y, C, w, h, n), (2, 3, 1, 4)) .+ x
+    end
+end
+
 # -- Top-level constructor -----------------------------------------------
 
 # Build a thin closure over the variant's `ls_init` so `convnext_stage`'s
 # block_ctor signature stays `C -> @compact`. Threading ls_init through every
 # call site instead of a closure would require parameterizing convnext_stage
 # itself, which would leak v1-specific configuration into shared code.
-_convnext_block_for(ls_init::Float32) = C -> convnext_block(C; ls_init = ls_init)
+# `conv_mlp` picks the block layout the same way: `false` (the default, timm's) is
+# `convnext_block_cl`, `true` the 1x1-convolution `convnext_block`.
+_convnext_block_for(ls_init::Float32, conv_mlp::Bool = false) =
+    conv_mlp ? (C -> convnext_block(C; ls_init = ls_init)) : (C -> convnext_block_cl(C; ls_init = ls_init))
 
 # Shared backbone forward, called from every branch of `convnext`. Any
 # future change to the backbone path (activation, downsample, stage
@@ -135,11 +208,11 @@ convnext_feature_info(cfg::ConvNeXtVariant) =
 # (`out_sel = last`) and the features-only pyramid
 # (`out_sel = feature_selector(indices)`). Both build the identical slot
 # tree, so one pretrained mapping serves both.
-function _convnext_backbone(cfg::ConvNeXtVariant, in_chans::Int, out_sel)
+function _convnext_backbone(cfg::ConvNeXtVariant, in_chans::Int, out_sel; conv_mlp::Bool = false)
     depths = cfg.depths
     dims = cfg.dims
     strides = (1, 2, 2, 2)
-    block_ctor = _convnext_block_for(cfg.ls_init)
+    block_ctor = _convnext_block_for(cfg.ls_init, conv_mlp)
     @compact(
         stem_conv = Conv(
             (4, 4),
@@ -184,6 +257,12 @@ logits shaped `(num_classes, N)`, matching `timm.forward(x)`. None of the
 DINOv3 variants currently registered ship a usable head, so this branch
 is exercised only when extending the variant table with future
 checkpoints.
+
+Blocks use timm's default `conv_mlp = False` layout, `convnext_block_cl`
+(channels-last LayerNorm and GEMM pointwise layers). `conv_mlp = true` selects
+the 1x1-convolution block, `convnext_block`, Luximm's default before 0.3. Both
+have the same parameter tree and the same outputs, so pretrained weights load
+either way.
 """
 function convnext(
     variant::Symbol;
@@ -191,6 +270,7 @@ function convnext(
     num_classes::Int = 0,
     features_only::Bool = false,
     out_indices = nothing,
+    conv_mlp::Bool = false,
 )
     cfg = get(CONVNEXT_VARIANTS, variant) do
         error(
@@ -201,16 +281,16 @@ function convnext(
     depths = cfg.depths
     dims = cfg.dims
     strides = (1, 2, 2, 2)
-    block_ctor = _convnext_block_for(cfg.ls_init)
+    block_ctor = _convnext_block_for(cfg.ls_init, conv_mlp)
 
     if features_only
         indices = resolve_out_indices(convnext_feature_info(cfg), out_indices, variant)
-        return _convnext_backbone(cfg, in_chans, feature_selector(indices))
+        return _convnext_backbone(cfg, in_chans, feature_selector(indices); conv_mlp)
     end
     _check_out_indices_unused(variant, out_indices)
 
     if num_classes == 0
-        _convnext_backbone(cfg, in_chans, last)
+        _convnext_backbone(cfg, in_chans, last; conv_mlp)
     else
         nc = num_classes
         @compact(
