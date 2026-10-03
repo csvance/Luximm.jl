@@ -2,6 +2,7 @@ module Models
 
 using Lux
 using NNlib
+using Statistics: mean
 using ..Layers
 using ..Interop:
     apply_state_dict,
@@ -217,7 +218,7 @@ end
     create_pretrained(variant; in_chans=3, num_classes=nothing,
                       features_only=false, out_indices=nothing,
                       revision="main", cache_dir=hf_hub_cache_dir(),
-                      prefix=()) -> (model, load)
+                      prefix=(), kwargs...) -> (model, load)
 
 Family-agnostic pretrained-weight entry point, mirroring
 `timm.create_model(..., pretrained=True)`. Returns the model and a
@@ -226,6 +227,9 @@ pair the caller produced with `Lux.setup`. The closure captures
 `variant`, `in_chans`, `num_classes`, and the HF / `prefix` kwargs at
 construction time, so calling it is the only place `(ps, st)` need to
 be threaded.
+Any other keyword goes to the family constructor through
+[`create_model`](@ref) (e.g. `conv_mlp = false` for a ConvNeXtV2); it
+shapes the model, never the weights the closure loads.
 
 ```julia
 model, load = create_pretrained(:resnet50_a1_in1k)
@@ -274,6 +278,7 @@ function create_pretrained(
     revision::AbstractString = "main",
     cache_dir::AbstractString = hf_hub_cache_dir(),
     prefix::Tuple{Vararg{Symbol}} = (),
+    kwargs...,
 )
     nc = if features_only
         (num_classes === nothing || num_classes == 0) || error(
@@ -291,6 +296,7 @@ function create_pretrained(
         num_classes = nc,
         features_only = features_only,
         out_indices = out_indices,
+        kwargs...,
     )
     load =
         (ps, st) -> _load_pretrained(

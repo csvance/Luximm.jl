@@ -46,3 +46,26 @@ const VARIANTS_TO_TEST = Tuple(sort(collect(keys(Luximm.CONVNEXT_VARIANTS))))
         end
     end
 end
+
+# The default block layout (timm's `conv_mlp = False`: LayerNorm over a contiguous channel axis, GEMM
+# pointwise layers) against the 1x1-convolution form (`conv_mlp = true`). No fixtures or downloads:
+# the parity tests above pin the default to timm, and this pins the two layouts to each other.
+@testset "ConvNeXt conv_mlp = true matches the default layout" begin
+    v = :convnext_tiny_dinov3_lvd1689m
+    a = Luximm.create_model(v; num_classes = 0, conv_mlp = true)
+    b = Luximm.create_model(v; num_classes = 0)
+    ps_a, st_a = Lux.setup(Xoshiro(0), a)
+    ps_b, st_b = Lux.setup(Xoshiro(0), b)
+    @test ps_a == ps_b                     # names, shapes and values: weights load unchanged
+    @test st_a == st_b
+    # LayerScale is initialized to 1e-6, which would hide the block behind the residual; give it
+    # non-trivial values so the block's own output is compared.
+    ps = Lux.Functors.fmap_with_path(ps_a) do kp, x
+        last(kp) == :gamma ? randn(Xoshiro(hash(kp)), Float32, size(x)) : x
+    end
+    x = randn(Xoshiro(1), Float32, 64, 64, 3, 2)
+    y_a, _ = a(x, ps, st_a)
+    y_b, _ = b(x, ps, st_b)
+    @test size(y_a) == size(y_b)
+    @test isapprox(y_b, y_a; rtol = 1.0f-4, atol = 1.0f-5)
+end
