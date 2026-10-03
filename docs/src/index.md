@@ -17,7 +17,7 @@ hero:
       text: View on GitHub
       link: https://github.com/csvance/Luximm.jl
   image:
-    src: /logo.svg
+    src: /icon.svg
     alt: Luximm.jl
 
 features:
