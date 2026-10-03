@@ -15,10 +15,10 @@
 """
     patch_embed(in_chans, embed_dim; patch=16) -> @compact block
 
-Split a `(W, H, in_chans, N)` image into `patch x patch` patches via a
-stride-`patch` conv and return a token tensor `(embed_dim, num_tokens, N)`
-where `num_tokens = (W/patch) * (H/patch)` and tokens run width-fastest,
-matching timm's `PatchEmbed`.
+Embed a `(W, H, in_chans, N)` image as a token tensor, matching timm's
+`PatchEmbed`. A stride-`patch` conv splits the image into `patch x patch`
+patches and returns `(embed_dim, num_tokens, N)`, where
+`num_tokens = (W/patch) * (H/patch)` and tokens run width-fastest.
 
 PyTorch keys `<prefix>.proj.weight` / `<prefix>.proj.bias` map to the `:proj`
 Conv leaves (`identity`, or `adapt_input_conv` for the weight when

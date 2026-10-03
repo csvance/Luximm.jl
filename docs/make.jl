@@ -1,4 +1,6 @@
 using Documenter
+using DocumenterCodeBlocks
+using DocumenterLandingPage
 using Luximm
 
 DocMeta.setdocmeta!(Luximm, :DocTestSetup, :(using Luximm); recursive = true)
@@ -30,6 +32,7 @@ makedocs(;
     checkdocs = :exports,
     doctest = false,
     warnonly = [:missing_docs],
+    plugins = [LandingPage(), CodeBlocks()],
 )
 
 deploydocs(; repo = "github.com/csvance/Luximm.jl")
