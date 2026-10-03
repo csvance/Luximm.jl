@@ -47,13 +47,13 @@ const VARIANTS_TO_TEST = Tuple(sort(collect(keys(Luximm.CONVNEXTV2_VARIANTS))))
     end
 end
 
-# `conv_mlp = false`: timm's channels-last block layout (LayerNorm over a contiguous channel axis,
-# GEMM pointwise layers). No fixtures or downloads: it is checked against the default layout,
-# which the parity tests above pin to timm.
-@testset "ConvNeXtV2 conv_mlp = false" begin
+# The default block layout (timm's `conv_mlp = False`: LayerNorm over a contiguous channel axis, GEMM
+# pointwise layers) against the 1x1-convolution form (`conv_mlp = true`). No fixtures or downloads:
+# the parity tests above pin the default to timm, and this pins the two layouts to each other.
+@testset "ConvNeXtV2 conv_mlp = true matches the default layout" begin
     v = :convnextv2_tiny_fcmae_ft_in22k_in1k
-    a = Luximm.create_model(v; num_classes = 0)
-    b = Luximm.create_model(v; num_classes = 0, conv_mlp = false)
+    a = Luximm.create_model(v; num_classes = 0, conv_mlp = true)
+    b = Luximm.create_model(v; num_classes = 0)
     ps_a, st_a = Lux.setup(Xoshiro(0), a)
     ps_b, st_b = Lux.setup(Xoshiro(0), b)
     @test ps_a == ps_b                     # names, shapes and values: weights load unchanged

@@ -1,7 +1,8 @@
 # ConvNeXtV2 backbone, Lux port of timm's `convnextv2_<variant>` family.
 #
-# Architecture (matches timm with `use_grn=True`, `conv_mlp=True`,
-# `ls_init_value=None`):
+# Architecture (matches timm with `use_grn=True`, `ls_init_value=None`; the default block
+# layout is timm's default `conv_mlp=False`, see `convnextv2_block_cl`; `conv_mlp = true` selects
+# the 1x1-convolution form below, `convnextv2_block`):
 #   - Stem: Conv((4,4), in_chans => dims[1]; stride=4, bias) followed by
 #     LayerNorm2d(dims[1]).
 #   - Four stages with depths from the variant. Stage 0 has no downsample
@@ -92,9 +93,10 @@ end
 """
     convnextv2_block_cl(C; mlp_ratio = 4, kernel = 7) -> @compact block
 
-The same block as [`convnextv2`](@ref)'s default with timm's `conv_mlp = False` layout: after
-the depthwise convolution, channels move to the contiguous axis, so the LayerNorm is a
-contiguous row reduction and the two pointwise layers are plain matrix multiplies.
+`convnextv2`'s default block, timm's `conv_mlp = False` layout: after the depthwise
+convolution, channels move to the contiguous axis, so the LayerNorm is a contiguous row
+reduction and the two pointwise layers are plain matrix multiplies. Numerically the same block as
+`convnextv2_block` (the `conv_mlp = true` form), and faster when compiled with Reactant.
 
     x (W, H, C, N) → conv_dw → permute to (C, W, H, N) → LayerNorm over dim 1 → fc1 as GEMM
       → GELU → GRN (spatial dims 2:3) → fc2 as GEMM → permute back → + x
@@ -106,7 +108,7 @@ same. A 1x1 convolution's `(1, 1, in, out)` kernel is the `(in, out)` matrix of 
 """
 function convnextv2_block_cl(C::Int; mlp_ratio::Int = 4, kernel::Int = 7)
     H = mlp_ratio * C
-    @compact(
+    return @compact(
         conv_dw = Conv(
             (kernel, kernel),
             C => C;
@@ -142,8 +144,10 @@ function convnextv2_block_cl(C::Int; mlp_ratio::Int = 4, kernel::Int = 7)
         w, h, _, n = size(y)
         y = permutedims(y, (3, 1, 2, 4))                     # (C, W, H, N)
         # layernorm2d's LayerNorm, over the now contiguous channel axis; its eps is 1f-6.
-        y = Lux.LuxLib.layernorm(y, reshape(norm.ps.scale, C, 1, 1, 1),
-            reshape(norm.ps.bias, C, 1, 1, 1), identity, 1, 1.0f-6)
+        y = Lux.LuxLib.layernorm(
+            y, reshape(norm.ps.scale, C, 1, 1, 1),
+            reshape(norm.ps.bias, C, 1, 1, 1), identity, 1, 1.0f-6
+        )
         y = reshape(fc1.ps.weight, C, H)' * reshape(y, C, :) .+ fc1.ps.bias   # (H, W*H*N)
         y = reshape(NNlib.gelu_erf.(y), H, w, h, n)          # exact GELU, as in convnextv2_block
         # GRN with the spatial dims at 2:3 and channels at 1; grn_layer's eps is 1f-6. The spatial
@@ -197,7 +201,7 @@ convnextv2_feature_info(cfg::ConvNeXtV2Variant) =
 # (`out_sel = last`) and the features-only pyramid
 # (`out_sel = feature_selector(indices)`). Both build the identical slot
 # tree, so one pretrained mapping serves both.
-function _convnextv2_backbone(cfg::ConvNeXtV2Variant, in_chans::Int, out_sel; conv_mlp::Bool = true)
+function _convnextv2_backbone(cfg::ConvNeXtV2Variant, in_chans::Int, out_sel; conv_mlp::Bool = false)
     block = _convnextv2_block_ctor(conv_mlp)
     depths = cfg.depths
     dims = cfg.dims
@@ -251,9 +255,10 @@ When `num_classes > 0`, a `NormMlpClassifierHead`-style head is attached
 (global mean pool → LayerNorm2d → flatten → Dense) and the forward returns
 logits shaped `(num_classes, N)`, matching `timm.forward(x)`.
 
-`conv_mlp = false` builds every block as [`convnextv2_block_cl`](@ref) (timm's `conv_mlp =
-False` layout: channels-last LayerNorm and GEMM pointwise layers); the default `true` keeps the
-1x1-convolution block. Both have the same parameter tree, so pretrained weights load either way.
+Blocks use timm's default `conv_mlp = False` layout, `convnextv2_block_cl` (channels-last
+LayerNorm and GEMM pointwise layers). `conv_mlp = true` selects the 1x1-convolution block,
+`convnextv2_block`, Luximm's default before 0.3. Both have the same parameter tree and
+the same outputs, so pretrained weights load either way.
 """
 function convnextv2(
     variant::Symbol;
@@ -261,7 +266,7 @@ function convnextv2(
     num_classes::Int = 0,
     features_only::Bool = false,
     out_indices = nothing,
-    conv_mlp::Bool = true,
+    conv_mlp::Bool = false,
 )
     block = _convnextv2_block_ctor(conv_mlp)
     cfg = get(CONVNEXTV2_VARIANTS, variant) do
@@ -336,7 +341,7 @@ end
 
 Build the `(pytorch_key, lux_path, transform)` triples that move a timm
 `convnextv2_<variant>` state_dict into the Lux tree produced by
-[`convnextv2`](@ref). The two head pieces are independent:
+`convnextv2`. The two head pieces are independent:
 `load_head_norm=true` adds the `head.norm.*` LayerNorm keys (whose dim
 depends on the feature width, not `num_classes`), and
 `load_classifier=true` adds the `head.fc.*` Dense keys (whose dim
