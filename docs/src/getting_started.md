@@ -320,6 +320,27 @@ points to learn. Each family registers its variants under one
 
 See the [API Reference](api/models.md) for the full signatures.
 
+## ConvNeXt block layout
+
+ConvNeXt and ConvNeXt V2 take a `conv_mlp` keyword that picks how each
+block computes its pointwise MLP. The default, `conv_mlp = false`, matches
+timm's default: channels move to the contiguous axis, so the LayerNorm is a
+contiguous reduction and the two pointwise layers are matrix multiplies.
+`conv_mlp = true` runs them as 1x1 convolutions in channels-first layout.
+
+`false` became the default in v0.3.0; earlier versions always used the 1x1
+convolution layout. The new default is faster: on an RTX A6000 under
+Reactant, a ConvNeXt V2 training step is about 1.17x faster and a ConvNeXt
+forward and backward pass about 1.24x. Both layouts have the same parameter
+tree, so pretrained weights and checkpoints saved with either load into the
+other, and their outputs agree to floating-point tolerance. To keep the
+pre-0.3 layout, pass `conv_mlp = true` to `create_model` or
+`create_pretrained`:
+
+```julia
+model, load = create_pretrained(:convnextv2_tiny_fcmae; conv_mlp = true)
+```
+
 ## Pretrained weights and the HuggingFace cache
 
 The `create_pretrained` closure resolves `model.safetensors` against

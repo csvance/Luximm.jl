@@ -45,6 +45,13 @@ end
 
 # -- Custom layers --------------------------------------------------------
 
+"""
+    convnextv2_block(C; mlp_ratio = 4, kernel = 7) -> @compact block
+
+The `conv_mlp = true` block of `convnextv2`, and the only layout before v0.3.0: the two pointwise
+layers run as 1x1 convolutions in channels-first (WHCN) layout, with GRN between them. The
+default block is `convnextv2_block_cl`, which has the same parameter tree.
+"""
 function convnextv2_block(C::Int; mlp_ratio::Int = 4, kernel::Int = 7)
     H = mlp_ratio * C
     @compact(
@@ -93,9 +100,10 @@ end
 """
     convnextv2_block_cl(C; mlp_ratio = 4, kernel = 7) -> @compact block
 
-`convnextv2`'s default block, timm's `conv_mlp = False` layout: after the depthwise
-convolution, channels move to the contiguous axis, so the LayerNorm is a contiguous row
-reduction and the two pointwise layers are plain matrix multiplies. Numerically the same block as
+`convnextv2`'s default block since v0.3.0 (`conv_mlp = false`), timm's `conv_mlp = False`
+layout: after the depthwise convolution, channels move to the contiguous axis, so the LayerNorm
+is a contiguous row reduction and the two pointwise layers are plain matrix multiplies. The GRN
+spatial reduction is also made contiguous. Numerically the same block as
 `convnextv2_block` (the `conv_mlp = true` form), and faster when compiled with Reactant.
 
     x (W, H, C, N) → conv_dw → permute to (C, W, H, N) → LayerNorm over dim 1 → fc1 as GEMM
@@ -239,7 +247,8 @@ end
 
 """
     convnextv2(variant; in_chans=3, num_classes=0,
-               features_only=false, out_indices=nothing) -> @compact block
+               features_only=false, out_indices=nothing,
+               conv_mlp=false) -> @compact block
 
 Build a ConvNeXtV2 backbone. `variant` is a key from [`CONVNEXTV2_VARIANTS`]
 (e.g. `:convnextv2_atto_fcmae`).
@@ -255,10 +264,20 @@ When `num_classes > 0`, a `NormMlpClassifierHead`-style head is attached
 (global mean pool → LayerNorm2d → flatten → Dense) and the forward returns
 logits shaped `(num_classes, N)`, matching `timm.forward(x)`.
 
-Blocks use timm's default `conv_mlp = False` layout, `convnextv2_block_cl` (channels-last
-LayerNorm and GEMM pointwise layers). `conv_mlp = true` selects the 1x1-convolution block,
-`convnextv2_block`, Luximm's default before 0.3. Both have the same parameter tree and
-the same outputs, so pretrained weights load either way.
+`conv_mlp` selects the block layout:
+
+  - `false` (the default) builds `convnextv2_block_cl`, timm's default
+    `conv_mlp = False` layout: LayerNorm over a contiguous channel axis, the
+    pointwise layers as GEMMs, and a contiguous GRN spatial reduction. It is
+    the faster layout.
+  - `true` builds `convnextv2_block`, the pointwise layers as 1x1
+    convolutions in channels-first layout.
+
+`false` became the default in v0.3.0; earlier versions always built the 1x1
+convolution layout. Both layouts have the same parameter tree, so pretrained
+weights and saved checkpoints load into either, and their outputs agree to
+floating-point tolerance. To keep the pre-0.3 layout, pass `conv_mlp = true`,
+e.g. `create_model(:convnextv2_tiny_fcmae; conv_mlp = true)`.
 """
 function convnextv2(
     variant::Symbol;

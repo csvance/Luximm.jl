@@ -38,11 +38,16 @@ include("Config.jl")
 
 # -- Custom layers --------------------------------------------------------
 
-# timm v1 block. Identical to convnextv2_block except: (a) no GRN between
-# act and fc2, and (b) a learnable per-channel LayerScale gamma applied
-# right before the residual sum. gamma is stored as a 1D (C,) parameter,
-# matching the PyTorch state-dict shape so the mapping transform is
-# `identity`.
+"""
+    convnext_block(C; mlp_ratio = 4, kernel = 7, ls_init) -> @compact block
+
+The `conv_mlp = true` block of `convnext`, and the only layout before v0.3.0: the two pointwise
+layers run as 1x1 convolutions in channels-first (WHCN) layout. Identical to `convnextv2_block`
+except: (a) no GRN between act and fc2, and (b) a learnable per-channel LayerScale gamma applied
+right before the residual sum. gamma is stored as a 1D (C,) parameter, matching the PyTorch
+state-dict shape so the mapping transform is `identity`. The default block is
+`convnext_block_cl`, which has the same parameter tree.
+"""
 function convnext_block(
     C::Int;
     mlp_ratio::Int = 4,
@@ -96,7 +101,7 @@ end
 """
     convnext_block_cl(C; mlp_ratio = 4, kernel = 7, ls_init) -> @compact block
 
-`convnext`'s default block, timm's `conv_mlp = False` layout: after the depthwise convolution,
+`convnext`'s default block since v0.3.0 (`conv_mlp = false`), timm's `conv_mlp = False` layout: after the depthwise convolution,
 channels move to the contiguous axis, so the LayerNorm is a contiguous row reduction, the two
 pointwise layers are plain matrix multiplies, and LayerScale scales the contiguous axis.
 
@@ -238,7 +243,8 @@ end
 
 """
     convnext(variant; in_chans=3, num_classes=0,
-             features_only=false, out_indices=nothing) -> @compact block
+             features_only=false, out_indices=nothing,
+             conv_mlp=false) -> @compact block
 
 Build a ConvNeXt v1 backbone. `variant` is a key from [`CONVNEXT_VARIANTS`]
 (e.g. `:convnext_tiny_dinov3_lvd1689m`).
@@ -258,11 +264,19 @@ DINOv3 variants currently registered ship a usable head, so this branch
 is exercised only when extending the variant table with future
 checkpoints.
 
-Blocks use timm's default `conv_mlp = False` layout, `convnext_block_cl`
-(channels-last LayerNorm and GEMM pointwise layers). `conv_mlp = true` selects
-the 1x1-convolution block, `convnext_block`, Luximm's default before 0.3. Both
-have the same parameter tree and the same outputs, so pretrained weights load
-either way.
+`conv_mlp` selects the block layout:
+
+  - `false` (the default) builds `convnext_block_cl`, timm's default
+    `conv_mlp = False` layout: LayerNorm over a contiguous channel axis and
+    the pointwise layers as GEMMs. It is the faster layout.
+  - `true` builds `convnext_block`, the pointwise layers as 1x1 convolutions
+    in channels-first layout.
+
+`false` became the default in v0.3.0; earlier versions always built the 1x1
+convolution layout. Both layouts have the same parameter tree, so pretrained
+weights and saved checkpoints load into either, and their outputs agree to
+floating-point tolerance. To keep the pre-0.3 layout, pass `conv_mlp = true`,
+e.g. `create_model(:convnext_tiny_fb_in1k; conv_mlp = true)`.
 """
 function convnext(
     variant::Symbol;
