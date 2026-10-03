@@ -115,8 +115,8 @@ function create_model(variant::Symbol; kwargs...)
         nc = get(kwargs, :num_classes, 0)
         nc == 0 || error(
             "`features_only = true` requires `num_classes = 0`; got $nc. " *
-            "A features-only model returns intermediate feature maps and has " *
-            "no classifier head.",
+                "A features-only model returns intermediate feature maps and has " *
+                "no classifier head.",
         )
     end
     if haskey(BIT_VARIANTS, variant)
@@ -138,8 +138,8 @@ function create_model(variant::Symbol; kwargs...)
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
-            "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end
@@ -171,8 +171,8 @@ function default_num_classes(variant::Symbol)
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
-            "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end
@@ -221,8 +221,8 @@ function feature_info(variant::Symbol; out_indices = nothing)
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
-            "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
     return select_features(full, resolve_out_indices(full, out_indices, variant))
@@ -284,21 +284,21 @@ info = feature_info(:resnet18_a1_in1k)   # decoder widths
 ```
 """
 function create_pretrained(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Union{Int,Nothing} = nothing,
-    features_only::Bool = false,
-    out_indices = nothing,
-    revision::AbstractString = "main",
-    cache_dir::AbstractString = hf_hub_cache_dir(),
-    prefix::Tuple{Vararg{Symbol}} = (),
-    kwargs...,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Union{Int, Nothing} = nothing,
+        features_only::Bool = false,
+        out_indices = nothing,
+        revision::AbstractString = "main",
+        cache_dir::AbstractString = hf_hub_cache_dir(),
+        prefix::Tuple{Vararg{Symbol}} = (),
+        kwargs...,
+    )
     nc = if features_only
         (num_classes === nothing || num_classes == 0) || error(
             "`features_only = true` requires `num_classes = 0` (or the " *
-            "default `nothing`); got $num_classes. A features-only model " *
-            "returns intermediate feature maps and has no classifier head.",
+                "default `nothing`); got $num_classes. A features-only model " *
+                "returns intermediate feature maps and has no classifier head.",
         )
         0
     else
@@ -314,15 +314,15 @@ function create_pretrained(
     )
     load =
         (ps, st) -> _load_pretrained(
-            ps,
-            st,
-            variant;
-            in_chans = in_chans,
-            num_classes = nc,
-            revision = revision,
-            cache_dir = cache_dir,
-            prefix = prefix,
-        )
+        ps,
+        st,
+        variant;
+        in_chans = in_chans,
+        num_classes = nc,
+        revision = revision,
+        cache_dir = cache_dir,
+        prefix = prefix,
+    )
     return model, load
 end
 
@@ -331,15 +331,15 @@ end
 # forwards them to the per-family loader, which uses them directly
 # instead of introspecting `ps`.
 function _load_pretrained(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     if haskey(BIT_VARIANTS, variant)
         return _load_bit_resnetv2(
             ps,
@@ -431,8 +431,8 @@ function _load_pretrained(
     else
         error(
             "Unknown variant: $variant. Not found in any of " *
-            "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-            "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
         )
     end
 end

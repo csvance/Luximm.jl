@@ -59,11 +59,11 @@ function preprocess(path::AbstractString, input::Int)
     rH, rW = size(img)
     top = (rH - input) ÷ 2 + 1
     left = (rW - input) ÷ 2 + 1
-    crop = img[top:top+input-1, left:left+input-1]
+    crop = img[top:(top + input - 1), left:(left + input - 1)]
     ch = channelview(crop)                         # (3, input, input): [c, h, w]
     # → WHCN, normalized: x[w, h, c, 1] = (pixel[c, h, w] - mean) / std
     x = Array{Float32}(undef, input, input, 3, 1)
-    @inbounds for c = 1:3, h = 1:input, w = 1:input
+    @inbounds for c in 1:3, h in 1:input, w in 1:input
         x[w, h, c, 1] = (Float32(ch[c, h, w]) - IMAGENET_MEAN[c]) / IMAGENET_STD[c]
     end
     return x
@@ -86,7 +86,7 @@ function main(args)
     nc = default_num_classes(variant)
     nc == 1000 || error(
         "variant $variant ships a $(nc)-class head; this demo expects an " *
-        "in1k (1000-class) classifier.",
+            "in1k (1000-class) classifier.",
     )
 
     @info "building $variant and loading pretrained weights…"
@@ -110,21 +110,22 @@ function main(args)
         label = ci <= length(labels) ? labels[ci] : "class $cls"
         println("  $rank. $(rpad(label, 28)) $(round(100 * probs[ci]; digits = 2))%  [class $cls]")
     end
+    return
 end
 
 # Native input side length for `variant`, read from whichever *_VARIANTS table
 # owns it. All registered in1k variants train at a square resolution.
 function _input_size(variant::Symbol)
     for tbl in (
-        Luximm.RESNET_VARIANTS,
-        Luximm.SERESNET_VARIANTS,
-        Luximm.VGG_VARIANTS,
-        Luximm.VIT_VARIANTS,
-        Luximm.COATNET_VARIANTS,
-        Luximm.BIT_VARIANTS,
-        Luximm.CONVNEXT_VARIANTS,
-        Luximm.CONVNEXTV2_VARIANTS,
-    )
+            Luximm.RESNET_VARIANTS,
+            Luximm.SERESNET_VARIANTS,
+            Luximm.VGG_VARIANTS,
+            Luximm.VIT_VARIANTS,
+            Luximm.COATNET_VARIANTS,
+            Luximm.BIT_VARIANTS,
+            Luximm.CONVNEXT_VARIANTS,
+            Luximm.CONVNEXTV2_VARIANTS,
+        )
         haskey(tbl, variant) && return tbl[variant].default_input_size
     end
     return 224

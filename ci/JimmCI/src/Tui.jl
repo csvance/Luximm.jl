@@ -37,9 +37,9 @@ end
     list_offset::Int = 0
     mode::ViewMode = VIEW_LIST
 
-    running::Union{Nothing,RunningJob} = nothing
+    running::Union{Nothing, RunningJob} = nothing
     queue::Vector{Job} = Job[]            # back-to-back master queue
-    pending_fork::Union{Nothing,Job} = nothing  # job awaiting fork-confirm
+    pending_fork::Union{Nothing, Job} = nothing  # job awaiting fork-confirm
 
     # Live-output plumbing
     log_pane::ScrollPane = ScrollPane(
@@ -56,7 +56,7 @@ end
 
     # Thread-safe log pipeline: background threads put! here; view() drains into log_pane.
     log_channel::Channel{String} = Channel{String}(Inf)
-    _wake::Union{Nothing,Function} = nothing
+    _wake::Union{Nothing, Function} = nothing
 
     refreshing::Bool = false
     status::String = "press r to refresh, ↑/↓ to select, Enter to run"
@@ -108,7 +108,7 @@ end
 
 function _push_log!(m::TuiModel, line::AbstractString)
     put!(m.log_channel, String(line))
-    m._wake !== nothing && m._wake()
+    return m._wake !== nothing && m._wake()
 end
 
 # Matches the Builder's per-family marker:
@@ -123,7 +123,7 @@ function _log_callback(m::TuiModel)
             mt = match(_FAMILY_MARKER_RE, line)
             mt === nothing || (rj.current_family = String(mt.captures[1]))
         end
-        _push_log!(m, line)
+        return _push_log!(m, line)
     end
 end
 
@@ -168,7 +168,7 @@ function _spawn_run!(m::TuiModel, job::Job)
             if e isa InterruptException || BuilderMod.is_cancelled(cancel)
                 return :cancelled
             end
-            @error "run_job failed" exception=(e, catch_backtrace())
+            @error "run_job failed" exception = (e, catch_backtrace())
             return e
         end
     end
@@ -197,7 +197,7 @@ function _spawn_skip!(m::TuiModel, job::Job)
             return job.head_sha
         catch e
             bt = catch_backtrace()
-            @error "mark_skipped failed" job=job.label exception=(e, bt)
+            @error "mark_skipped failed" job = job.label exception = (e, bt)
             # CapturedException bundles the backtrace so the TaskEvent
             # handler's `sprint(showerror, …)` renders something useful
             # instead of just the bare error type.
@@ -223,7 +223,7 @@ function update!(m::TuiModel, evt::KeyEvent)
 end
 
 function _on_key_list!(m::TuiModel, evt::KeyEvent)
-    if evt.key == :char
+    return if evt.key == :char
         c = evt.char
         c == 'q' && (m.quit = true; return)
         c == 'j' && (_move_selection!(m, 1); return)
@@ -255,11 +255,11 @@ function _on_key_running!(m::TuiModel, evt::KeyEvent)
         m.mode = VIEW_CONFIRM_CANCEL
         return
     end
-    handle_key!(m.log_pane, evt)
+    return handle_key!(m.log_pane, evt)
 end
 
 function _on_key_confirm_cancel!(m::TuiModel, evt::KeyEvent)
-    if evt.key == :char
+    return if evt.key == :char
         c = evt.char
         if c == 'y' || c == 'Y'
             _cancel_current!(m)
@@ -274,7 +274,7 @@ function _on_key_confirm_cancel!(m::TuiModel, evt::KeyEvent)
 end
 
 function _on_key_confirm_fork!(m::TuiModel, evt::KeyEvent)
-    if evt.key == :char
+    return if evt.key == :char
         c = evt.char
         if c == 'y' || c == 'Y'
             _confirm_fork_run!(m)
@@ -288,7 +288,7 @@ end
 
 function _move_selection!(m::TuiModel, delta::Int)
     isempty(m.jobs) && return
-    m.selected = clamp(m.selected + delta, 1, length(m.jobs))
+    return m.selected = clamp(m.selected + delta, 1, length(m.jobs))
 end
 
 function _run_selected!(m::TuiModel)
@@ -304,7 +304,7 @@ function _run_selected!(m::TuiModel)
     # Remove from list — it's now in flight.
     deleteat!(m.jobs, m.selected)
     m.selected = clamp(m.selected, 1, max(length(m.jobs), 1))
-    _spawn_run!(m, job)
+    return _spawn_run!(m, job)
 end
 
 function _confirm_fork_run!(m::TuiModel)
@@ -321,13 +321,13 @@ function _confirm_fork_run!(m::TuiModel)
         deleteat!(m.jobs, idx)
         m.selected = clamp(m.selected, 1, max(length(m.jobs), 1))
     end
-    _spawn_run!(m, job)
+    return _spawn_run!(m, job)
 end
 
 function _cancel_fork_modal!(m::TuiModel)
     m.pending_fork = nothing
     m.mode = VIEW_LIST
-    m.status = "fork run cancelled"
+    return m.status = "fork run cancelled"
 end
 
 function _run_all_master!(m::TuiModel)
@@ -354,7 +354,7 @@ function _run_all_master!(m::TuiModel)
     isempty(queue) && return
     first_job = popfirst!(queue)
     m.queue = queue
-    _spawn_run!(m, first_job)
+    return _spawn_run!(m, first_job)
 end
 
 function _skip_selected!(m::TuiModel)
@@ -362,7 +362,7 @@ function _skip_selected!(m::TuiModel)
     job = m.jobs[m.selected]
     deleteat!(m.jobs, m.selected)
     m.selected = clamp(m.selected, 1, max(length(m.jobs), 1))
-    _spawn_skip!(m, job)
+    return _spawn_skip!(m, job)
 end
 
 function _cancel_current!(m::TuiModel)
@@ -370,19 +370,19 @@ function _cancel_current!(m::TuiModel)
     rj === nothing && return
     request_cancel!(rj.cancel)
     m.status = "cancellation requested for $(rj.job.label)…"
-    m.mode = VIEW_RUNNING
+    return m.mode = VIEW_RUNNING
 end
 
 function _cancel_all!(m::TuiModel)
     empty!(m.queue)
     _cancel_current!(m)
-    m.status = "cancelling current + clearing queue"
+    return m.status = "cancelling current + clearing queue"
 end
 
 # ── TaskEvent ingestion ──────────────────────────────────────────────
 
 function update!(m::TuiModel, evt::TaskEvent)
-    if evt.id == :refresh
+    return if evt.id == :refresh
         m.refreshing = false
         if evt.value isa Exception
             m.status = "refresh failed: $(sprint(showerror, evt.value))"
@@ -455,7 +455,7 @@ function view(m::TuiModel, f::Frame)
         _render_fork_modal!(m, buf, body_area)
     end
 
-    _render_status!(m, buf, status_area)
+    return _render_status!(m, buf, status_area)
 end
 
 function _render_header!(m::TuiModel, buf, area)
@@ -468,7 +468,7 @@ function _render_header!(m::TuiModel, buf, area)
         ""
     end
     title = "$(spinner)$(length(m.jobs)) pending$(extra)"
-    set_string!(buf, area.x + 1, area.y, title, tstyle(:text); max_x = right(area))
+    return set_string!(buf, area.x + 1, area.y, title, tstyle(:text); max_x = right(area))
 end
 
 function _render_list!(m::TuiModel, buf, area)
@@ -488,10 +488,10 @@ function _render_list!(m::TuiModel, buf, area)
         ListItem(
             _row_text(j),
             j.is_fork ? tstyle(:warning) :
-            j.kind == Jobs.PR_JOB ? tstyle(:primary) : tstyle(:secondary),
+                j.kind == Jobs.PR_JOB ? tstyle(:primary) : tstyle(:secondary),
         ) for j in m.jobs
     ]
-    render(
+    return render(
         SelectableList(
             items;
             selected = m.selected,
@@ -518,7 +518,7 @@ function _render_running!(m::TuiModel, buf, area)
     end
     rows = split_layout(Layout(Vertical, [Fixed(2), Fill()]), area)
     length(rows) < 2 && return
-    info_area = rows[1];
+    info_area = rows[1]
     pane_area = rows[2]
 
     elapsed = Dates.value(now(UTC) - rj.started_at) ÷ 1000
@@ -545,7 +545,7 @@ function _render_running!(m::TuiModel, buf, area)
             max_x = right(info_area),
         )
     end
-    render(m.log_pane, pane_area, buf)
+    return render(m.log_pane, pane_area, buf)
 end
 
 function _render_cancel_modal!(m::TuiModel, buf, area)
@@ -553,7 +553,7 @@ function _render_cancel_modal!(m::TuiModel, buf, area)
     h = 7
     (w < 10 || h > area.height) && return
     rect = center(area, w, h)
-    for cy = rect.y:bottom(rect), cx = rect.x:right(rect)
+    for cy in rect.y:bottom(rect), cx in rect.x:right(rect)
         in_bounds(buf, cx, cy) && set_char!(buf, cx, cy, ' ', tstyle(:text))
     end
     inner = render(
@@ -573,7 +573,7 @@ function _render_cancel_modal!(m::TuiModel, buf, area)
         tstyle(:text);
         max_x = right(inner),
     )
-    set_string!(
+    return set_string!(
         buf,
         inner.x + 2,
         inner.y + 3,
@@ -590,7 +590,7 @@ function _render_fork_modal!(m::TuiModel, buf, area)
     h = 9
     (w < 20 || h > area.height) && return
     rect = center(area, w, h)
-    for cy = rect.y:bottom(rect), cx = rect.x:right(rect)
+    for cy in rect.y:bottom(rect), cx in rect.x:right(rect)
         in_bounds(buf, cx, cy) && set_char!(buf, cx, cy, ' ', tstyle(:text))
     end
     inner = render(
@@ -628,7 +628,7 @@ function _render_fork_modal!(m::TuiModel, buf, area)
         tstyle(:text);
         max_x = right(inner),
     )
-    set_string!(
+    return set_string!(
         buf,
         inner.x + 2,
         inner.y + 6,
@@ -648,7 +648,7 @@ function _render_status!(m::TuiModel, buf, area)
     else
         "[y] yes  [a] cancel queue too  [n/Esc] keep running"
     end
-    render(
+    return render(
         StatusBar(
             left = [Span("  $(m.status)  ", tstyle(:text_dim))],
             right = [Span(hint * " ", tstyle(:text_dim))],

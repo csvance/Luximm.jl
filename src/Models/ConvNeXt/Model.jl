@@ -49,13 +49,13 @@ state-dict shape so the mapping transform is `identity`. The default block is
 `convnext_block_cl`, which has the same parameter tree.
 """
 function convnext_block(
-    C::Int;
-    mlp_ratio::Int = 4,
-    kernel::Int = 7,
-    ls_init::Float32 = _CN_V1_LS_INIT,
-)
+        C::Int;
+        mlp_ratio::Int = 4,
+        kernel::Int = 7,
+        ls_init::Float32 = _CN_V1_LS_INIT,
+    )
     H = mlp_ratio * C
-    @compact(
+    return @compact(
         conv_dw = Conv(
             (kernel, kernel),
             C => C;
@@ -218,7 +218,7 @@ function _convnext_backbone(cfg::ConvNeXtVariant, in_chans::Int, out_sel; conv_m
     dims = cfg.dims
     strides = (1, 2, 2, 2)
     block_ctor = _convnext_block_for(cfg.ls_init, conv_mlp)
-    @compact(
+    return @compact(
         stem_conv = Conv(
             (4, 4),
             in_chans => dims[1];
@@ -279,17 +279,17 @@ floating-point tolerance. To keep the pre-0.3 layout, pass `conv_mlp = true`,
 e.g. `create_model(:convnext_tiny_fb_in1k; conv_mlp = true)`.
 """
 function convnext(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-    conv_mlp::Bool = false,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+        conv_mlp::Bool = false,
+    )
     cfg = get(CONVNEXT_VARIANTS, variant) do
         error(
             "Unknown ConvNeXt variant: $variant. Known variants: " *
-            "$(sort(collect(keys(CONVNEXT_VARIANTS))))",
+                "$(sort(collect(keys(CONVNEXT_VARIANTS))))",
         )
     end
     depths = cfg.depths
@@ -303,7 +303,7 @@ function convnext(
     end
     _check_out_indices_unused(variant, out_indices)
 
-    if num_classes == 0
+    return if num_classes == 0
         _convnext_backbone(cfg, in_chans, last; conv_mlp)
     else
         nc = num_classes
@@ -372,17 +372,17 @@ we reshape to `(1, 1, in, out)` to land in a Lux `Conv((1,1))`; (b)
 transpose back to `(out, in)`.
 """
 function convnext_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_head_norm::Bool = false,
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_head_norm::Bool = false,
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(CONVNEXT_VARIANTS, variant) do
         error(
             "Unknown ConvNeXt variant: $variant. Known variants: " *
-            "$(sort(collect(keys(CONVNEXT_VARIANTS))))",
+                "$(sort(collect(keys(CONVNEXT_VARIANTS))))",
         )
     end
     mapping = _CN_MAPPING_ENTRY[]
@@ -399,7 +399,7 @@ function convnext_mapping(
             push_downsample_mapping!(mapping, prefix, stage_sym, py_stage)
         end
 
-        for j = 1:depth
+        for j in 1:depth
             block_path = convnext_stage_block_path(i, stride, j)
             py_block = "$(py_stage).blocks.$(j - 1)"
 
@@ -523,15 +523,15 @@ When `in_chans != 3`, the stem weight is adapted from the released
 load time.
 """
 function _load_convnext(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = CONVNEXT_VARIANTS[variant]
     # `head_norm` exists in the model iff `num_classes > 0` (the
     # constructor's `else` branch). The classifier rule is the same
@@ -540,9 +540,9 @@ function _load_convnext(
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone " *
-              "(and head_norm) only; the classifier is left at its Lux.setup random " *
-              "initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone " *
+            "(and head_norm) only; the classifier is left at its Lux.setup random " *
+            "initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

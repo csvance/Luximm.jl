@@ -63,7 +63,7 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
     fixture = load_featsonly_fixture(variant)
     if fixture === nothing
         @info "skipping $(variant) feature pyramid: fixture missing at " *
-              featsonly_fixture_path(variant)
+            featsonly_fixture_path(variant)
         return nothing
     end
 
@@ -88,7 +88,7 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
             ref_scale = max(maximum(abs.(expected)), eps(Float32))
             rel = diff / ref_scale
             @info "$(variant) tap $i ($(info.names[i]), reduction " *
-                  "$(info.reductions[i])) max-abs-diff = $diff, rel = $rel"
+                "$(info.reductions[i])) max-abs-diff = $diff, rel = $rel"
             @test rel < FEATURES_RTOL
         end
 
@@ -116,14 +116,14 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
             tap_equal = size(got) == size(ref) && got == ref
             if size(got) != size(ref)
                 @info "$(variant) subset tap $i: size $(size(got)) != full tap " *
-                      "$(sub_indices[i]) size $(size(ref))"
+                    "$(sub_indices[i]) size $(size(ref))"
             elseif !tap_equal
                 d = maximum(abs.(got .- ref))
                 scale = maximum(abs.(ref))
                 @info "$(variant) subset tap $i (full tap $(sub_indices[i])): " *
-                      "$(count(got .!= ref)) of $(length(ref)) elements differ, " *
-                      "max-abs-diff = $d, ref scale = $scale, " *
-                      "rel = $(d / max(scale, eps(Float32)))"
+                    "$(count(got .!= ref)) of $(length(ref)) elements differ, " *
+                    "max-abs-diff = $d, ref scale = $scale, " *
+                    "rel = $(d / max(scale, eps(Float32)))"
             end
             mismatched |= !tap_equal
             @test tap_equal
@@ -140,12 +140,12 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
                 rerun[i] == feats[i] && continue
                 stable = false
                 @info "$(variant) rerun control tap $i: " *
-                      "$(count(rerun[i] .!= feats[i])) of $(length(feats[i])) " *
-                      "elements differ between two identical full passes, " *
-                      "max-abs-diff = $(maximum(abs.(rerun[i] .- feats[i])))"
+                    "$(count(rerun[i] .!= feats[i])) of $(length(feats[i])) " *
+                    "elements differ between two identical full passes, " *
+                    "max-abs-diff = $(maximum(abs.(rerun[i] .- feats[i])))"
             end
             stable && @info "$(variant) rerun control: two identical full passes " *
-                  "agree bitwise, so the subset mismatch is not run-to-run noise"
+                "agree bitwise, so the subset mismatch is not run-to-run noise"
         end
 
         sub_info = feature_info(variant; out_indices = sub_indices)
@@ -199,9 +199,9 @@ function run_variant_parity(variant::Symbol, fixture)
     end
 
     fixture_in1c = load_parity_fixture(variant; in_chans = 1)
-    if fixture_in1c === nothing
+    return if fixture_in1c === nothing
         @info "skipping $(variant) in_chans=1: fixture missing at " *
-              parity_fixture_path(variant; in_chans = 1)
+            parity_fixture_path(variant; in_chans = 1)
     else
         @testset "forward_features (in_chans=1)" begin
             x1 = fixture_in1c.input

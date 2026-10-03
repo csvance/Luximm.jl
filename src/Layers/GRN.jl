@@ -25,7 +25,7 @@ PyTorch state-dict keys `<prefix>.weight` and `<prefix>.bias` map to the
 `:scale` and `:bias` leaves of this layer with the `identity` transform.
 """
 function grn_layer(C::Int; eps::Float32 = 1.0f-6)
-    @compact(scale = zeros32(C), bias = zeros32(C), eps = eps,) do x
+    return @compact(scale = zeros32(C), bias = zeros32(C), eps = eps) do x
         g = sqrt.(sum(x .^ 2; dims = (1, 2)))         # (1, 1, C, N)
         n = g ./ (mean(g; dims = 3) .+ eps)            # (1, 1, C, N)
         s = reshape(scale, 1, 1, :, 1)

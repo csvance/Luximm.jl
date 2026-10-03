@@ -33,7 +33,7 @@ PyTorch keys map as: `norm1/norm2.{weight,bias}` → `(:norm1/:norm2,
 """
 function vit_block(dim::Int; num_heads::Int, mlp_ratio::Int = 4, eps::Float32 = 1.0f-6)
     hidden = mlp_ratio * dim
-    @compact(
+    return @compact(
         norm1 = vit_layernorm(dim; eps = eps),
         attn = mhsa(dim; num_heads = num_heads),
         norm2 = vit_layernorm(dim; eps = eps),

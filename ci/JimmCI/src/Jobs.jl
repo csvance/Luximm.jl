@@ -27,12 +27,12 @@ mutable struct Job
     full_sweep::Bool
     label::String
     kind::JobKind
-    pr_number::Union{Int,Nothing}
-    pr_title::Union{String,Nothing}
-    head_repo::Union{String,Nothing} # `<owner>/<repo>` of the PR head; nothing for master
+    pr_number::Union{Int, Nothing}
+    pr_title::Union{String, Nothing}
+    head_repo::Union{String, Nothing} # `<owner>/<repo>` of the PR head; nothing for master
     is_fork::Bool                    # head_repo != base repo
     created_at::DateTime              # chronological-sort key (UTC)
-    check_runs::Dict{String,Int}
+    check_runs::Dict{String, Int}
 end
 
 Job(
@@ -59,7 +59,7 @@ Job(
     head_repo === nothing ? nothing : String(head_repo),
     is_fork,
     created_at,
-    Dict{String,Int}(),
+    Dict{String, Int}(),
 )
 
 check_name(family::AbstractString, variant::AbstractString) =
@@ -105,9 +105,9 @@ function _classify_pr_head(pr)
     # deleted; `get(head, "repo", Dict())` would still return `nothing`
     # in that case, so unwrap explicitly before reaching for `full_name`.
     _full_name(side) =
-        let r = get(side, "repo", nothing)
-            r === nothing ? nothing : get(r, "full_name", nothing)
-        end
+    let r = get(side, "repo", nothing)
+        r === nothing ? nothing : get(r, "full_name", nothing)
+    end
     head_repo = _full_name(get(pr, "head", Dict()))
     base_repo = _full_name(get(pr, "base", Dict()))
     is_fork = head_repo !== nothing && base_repo !== nothing && head_repo != base_repo
@@ -135,7 +135,7 @@ function _pr_jobs(cfg, gh)
         try
             paths = compare(gh, repo_fullname(cfg), String(base_sha), String(head_sha))
         catch e
-            @warn "PR #$number compare failed" exception=e
+            @warn "PR #$number compare failed" exception = e
             continue
         end
         fams = families_for_paths(paths)
@@ -175,7 +175,7 @@ function _master_jobs(cfg, gh)
     try
         commits = list_commits(gh, repo_fullname(cfg); sha = "master", since = since)
     catch e
-        @warn "listing master commits failed" exception=e
+        @warn "listing master commits failed" exception = e
         commits = Any[]
     end
 
@@ -189,14 +189,14 @@ function _master_jobs(cfg, gh)
         try
             check_runs = list_check_runs(gh, repo_fullname(cfg), String(sha))
         catch e
-            @warn "list_check_runs failed" sha=first(String(sha), 8) exception=e
+            @warn "list_check_runs failed" sha = first(String(sha), 8) exception = e
             continue
         end
         all(has_completed_check(check_runs, f) for f in ALL_FAMILIES) && continue
 
         committed_at = _parse_iso(
             get(get(commit, "commit", Dict()), "committer", Dict()) |>
-            d -> get(d, "date", nothing),
+                d -> get(d, "date", nothing),
         )
 
         push!(

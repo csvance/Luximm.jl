@@ -54,7 +54,7 @@ default block is `convnextv2_block_cl`, which has the same parameter tree.
 """
 function convnextv2_block(C::Int; mlp_ratio::Int = 4, kernel::Int = 7)
     H = mlp_ratio * C
-    @compact(
+    return @compact(
         conv_dw = Conv(
             (kernel, kernel),
             C => C;
@@ -214,7 +214,7 @@ function _convnextv2_backbone(cfg::ConvNeXtV2Variant, in_chans::Int, out_sel; co
     depths = cfg.depths
     dims = cfg.dims
     strides = (1, 2, 2, 2)
-    @compact(
+    return @compact(
         stem_conv = Conv(
             (4, 4),
             in_chans => dims[1];
@@ -280,18 +280,18 @@ floating-point tolerance. To keep the pre-0.3 layout, pass `conv_mlp = true`,
 e.g. `create_model(:convnextv2_tiny_fcmae; conv_mlp = true)`.
 """
 function convnextv2(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-    conv_mlp::Bool = false,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+        conv_mlp::Bool = false,
+    )
     block = _convnextv2_block_ctor(conv_mlp)
     cfg = get(CONVNEXTV2_VARIANTS, variant) do
         error(
             "Unknown ConvNeXtV2 variant: $variant. Known variants: " *
-            "$(sort(collect(keys(CONVNEXTV2_VARIANTS))))",
+                "$(sort(collect(keys(CONVNEXTV2_VARIANTS))))",
         )
     end
     depths = cfg.depths
@@ -304,7 +304,7 @@ function convnextv2(
     end
     _check_out_indices_unused(variant, out_indices)
 
-    if num_classes == 0
+    return if num_classes == 0
         _convnextv2_backbone(cfg, in_chans, last; conv_mlp)
     else
         nc = num_classes
@@ -378,17 +378,17 @@ it's `(in, out)`, but Lux `Dense` stores weight as `(out, in)`, so we
 apply `axis_reverse` to transpose it.
 """
 function convnextv2_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_head_norm::Bool = false,
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_head_norm::Bool = false,
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(CONVNEXTV2_VARIANTS, variant) do
         error(
             "Unknown ConvNeXtV2 variant: $variant. Known variants: " *
-            "$(sort(collect(keys(CONVNEXTV2_VARIANTS))))",
+                "$(sort(collect(keys(CONVNEXTV2_VARIANTS))))",
         )
     end
     mapping = _CN_MAPPING_ENTRY[]
@@ -405,7 +405,7 @@ function convnextv2_mapping(
             push_downsample_mapping!(mapping, prefix, stage_sym, py_stage)
         end
 
-        for j = 1:depth
+        for j in 1:depth
             block_path = convnext_stage_block_path(i, stride, j)
             py_block = "$(py_stage).blocks.$(j - 1)"
 
@@ -537,23 +537,23 @@ When `in_chans != 3`, the stem weight is adapted from the released
 load time.
 """
 function _load_convnextv2(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = CONVNEXTV2_VARIANTS[variant]
     load_head_norm = num_classes > 0
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone " *
-              "(and head_norm) only; the classifier is left at its Lux.setup random " *
-              "initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone " *
+            "(and head_norm) only; the classifier is left at its Lux.setup random " *
+            "initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

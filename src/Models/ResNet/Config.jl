@@ -24,8 +24,8 @@ Fields:
 struct ResNetVariant
     name::Symbol
     block::Symbol
-    layers::NTuple{4,Int}
-    planes::NTuple{4,Int}
+    layers::NTuple{4, Int}
+    planes::NTuple{4, Int}
     num_features::Int
     hf_repo::String
     default_num_classes::Int
@@ -38,7 +38,7 @@ end
 Lookup table for classic ResNet variants currently ported from timm.
 Keys are the timm model names with dots rewritten as underscores.
 """
-const RESNET_VARIANTS = Dict{Symbol,ResNetVariant}(
+const RESNET_VARIANTS = Dict{Symbol, ResNetVariant}(
     :resnet18_a1_in1k => ResNetVariant(
         :resnet18_a1_in1k,
         :basic,

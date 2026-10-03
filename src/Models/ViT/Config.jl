@@ -72,7 +72,7 @@ vit_num_tokens(cfg::ViTVariant) = (cfg.img_size ÷ cfg.patch)^2 + 1
 Lookup table for the Vision Transformer variants ported from timm. Keys are the
 timm model name with dots rewritten as underscores.
 """
-const VIT_VARIANTS = Dict{Symbol,ViTVariant}(
+const VIT_VARIANTS = Dict{Symbol, ViTVariant}(
     :vit_base_patch16_224_augreg2_in21k_ft_in1k => ViTVariant(
         :vit_base_patch16_224_augreg2_in21k_ft_in1k,
         12,

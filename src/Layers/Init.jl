@@ -18,11 +18,11 @@ Lux `Conv` weight shape is `(kW, kH, in, out)`, so
 `(out, in)`, `fan_out = dims[1]`.
 """
 function kaiming_normal_fan_out(
-    rng::AbstractRNG,
-    ::Type{T},
-    dims::Integer...,
-) where {T<:Real}
-    fan_out = length(dims) <= 2 ? dims[1] : dims[end] * prod(dims[1:(end-2)])
+        rng::AbstractRNG,
+        ::Type{T},
+        dims::Integer...,
+    ) where {T <: Real}
+    fan_out = length(dims) <= 2 ? dims[1] : dims[end] * prod(dims[1:(end - 2)])
     std = sqrt(T(2) / T(fan_out))
     return std .* randn(rng, T, dims...)
 end

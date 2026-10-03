@@ -36,7 +36,7 @@ _resnet_expansion(block::Symbol) =
     block == :bottleneck ? 4 : error("unknown ResNet block type: $block")
 
 function resnet_basic_block(in_ch::Int, out_ch::Int, stride::Int; downsample::Bool)
-    if downsample
+    return if downsample
         @compact(
             conv1 = Conv(
                 (3, 3),
@@ -110,7 +110,7 @@ end
 
 function resnet_bottleneck_block(in_ch::Int, plane_ch::Int, stride::Int; downsample::Bool)
     out_ch = 4 * plane_ch
-    if downsample
+    return if downsample
         @compact(
             conv1 = Conv(
                 (1, 1),
@@ -207,12 +207,12 @@ function resnet_bottleneck_block(in_ch::Int, plane_ch::Int, stride::Int; downsam
 end
 
 function classic_resnet_stage(
-    block::Symbol,
-    in_ch::Int,
-    plane_ch::Int,
-    depth::Int,
-    stride::Int,
-)
+        block::Symbol,
+        in_ch::Int,
+        plane_ch::Int,
+        depth::Int,
+        stride::Int,
+    )
     blocks = []
     expansion = _resnet_expansion(block)
     out_ch = expansion * plane_ch
@@ -230,7 +230,7 @@ function classic_resnet_stage(
     else
         error("unknown ResNet block type: $block")
     end
-    for _ = 2:depth
+    for _ in 2:depth
         if block == :basic
             push!(blocks, resnet_basic_block(out_ch, out_ch, 1; downsample = false))
         else
@@ -283,7 +283,7 @@ function _resnet_backbone(cfg::ResNetVariant, in_chans::Int, out_sel)
     planes = cfg.planes
     expansion = _resnet_expansion(cfg.block)
     stage_chs = ntuple(i -> expansion * planes[i], 4)
-    @compact(
+    return @compact(
         conv1 = Conv(
             (7, 7),
             in_chans => 64;
@@ -315,16 +315,16 @@ feature maps instead of a single one; see [`feature_info`](@ref) for the tap
 table and [`create_model`](@ref) for the shared semantics.
 """
 function resnet(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     cfg = get(RESNET_VARIANTS, variant) do
         error(
             "Unknown ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(RESNET_VARIANTS))))",
+                "$(sort(collect(keys(RESNET_VARIANTS))))",
         )
     end
     depths = cfg.layers
@@ -338,7 +338,7 @@ function resnet(
     end
     _check_out_indices_unused(variant, out_indices)
 
-    if num_classes == 0
+    return if num_classes == 0
         _resnet_backbone(cfg, in_chans, last)
     else
         nc = num_classes
@@ -374,23 +374,23 @@ _resnet_last_bn_name(block::Symbol) =
     block == :basic ? :bn2 :
     block == :bottleneck ? :bn3 : error("unknown ResNet block type: $block")
 
-_RESNET_MAPPING_ENTRY = Tuple{String,Tuple{Vararg{Symbol}},Function}
+_RESNET_MAPPING_ENTRY = Tuple{String, Tuple{Vararg{Symbol}}, Function}
 
 function _push_resnet_bn_param_mapping!(
-    mapping,
-    py_prefix::String,
-    lux_path::Tuple{Vararg{Symbol}},
-)
+        mapping,
+        py_prefix::String,
+        lux_path::Tuple{Vararg{Symbol}},
+    )
     push!(mapping, ("$(py_prefix).weight", (lux_path..., :scale), identity))
     push!(mapping, ("$(py_prefix).bias", (lux_path..., :bias), identity))
     return mapping
 end
 
 function _push_resnet_bn_state_mapping!(
-    mapping,
-    py_prefix::String,
-    lux_path::Tuple{Vararg{Symbol}},
-)
+        mapping,
+        py_prefix::String,
+        lux_path::Tuple{Vararg{Symbol}},
+    )
     push!(mapping, ("$(py_prefix).running_mean", (lux_path..., :running_mean), identity))
     push!(mapping, ("$(py_prefix).running_var", (lux_path..., :running_var), identity))
     return mapping
@@ -410,16 +410,16 @@ BatchNorm running statistics are state, not params; use
 the `fc.*` keys are also included.
 """
 function resnet_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(RESNET_VARIANTS, variant) do
         error(
             "Unknown ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(RESNET_VARIANTS))))",
+                "$(sort(collect(keys(RESNET_VARIANTS))))",
         )
     end
     mapping = _RESNET_MAPPING_ENTRY[]
@@ -429,7 +429,7 @@ function resnet_mapping(
     _push_resnet_bn_param_mapping!(mapping, "bn1", (prefix..., :bn1))
 
     for (stage, depth) in enumerate(cfg.layers)
-        for block = 1:depth
+        for block in 1:depth
             block_path = _resnet_block_path(stage, block)
             py_block = "layer$(stage).$(block - 1)"
             push!(
@@ -510,21 +510,21 @@ Build the state mapping for BatchNorm running statistics in a classic timm
 ResNet state dict.
 """
 function resnet_state_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(RESNET_VARIANTS, variant) do
         error(
             "Unknown ResNet variant: $variant. Known variants: " *
-            "$(sort(collect(keys(RESNET_VARIANTS))))",
+                "$(sort(collect(keys(RESNET_VARIANTS))))",
         )
     end
     mapping = _RESNET_MAPPING_ENTRY[]
 
     _push_resnet_bn_state_mapping!(mapping, "bn1", (prefix..., :bn1))
     for (stage, depth) in enumerate(cfg.layers)
-        for block = 1:depth
+        for block in 1:depth
             block_path = _resnet_block_path(stage, block)
             py_block = "layer$(stage).$(block - 1)"
             _push_resnet_bn_state_mapping!(
@@ -561,7 +561,7 @@ function resnet_state_mapping(
     return mapping
 end
 
-function _set_resnet_state_leaf(nt::NamedTuple, path::NTuple{N,Symbol}, leaf) where {N}
+function _set_resnet_state_leaf(nt::NamedTuple, path::NTuple{N, Symbol}, leaf) where {N}
     head = path[1]
     haskey(nt, head) || error("state path missing key: $head (have: $(propertynames(nt)))")
     if N == 1
@@ -572,7 +572,7 @@ function _set_resnet_state_leaf(nt::NamedTuple, path::NTuple{N,Symbol}, leaf) wh
     end
 end
 
-function apply_resnet_state_dict(st, state_dict::Dict{String,<:AbstractArray}, mapping)
+function apply_resnet_state_dict(st, state_dict::Dict{String, <:AbstractArray}, mapping)
     out = st
     for (pykey, lux_path, transform) in mapping
         haskey(state_dict, pykey) || error("missing PyTorch state_dict key: $pykey")
@@ -583,11 +583,11 @@ function apply_resnet_state_dict(st, state_dict::Dict{String,<:AbstractArray}, m
 end
 
 function _validate_resnet_consumed_keys(
-    state_dict::Dict,
-    param_mapping,
-    state_mapping;
-    load_classifier::Bool = false,
-)
+        state_dict::Dict,
+        param_mapping,
+        state_mapping;
+        load_classifier::Bool = false,
+    )
     consumed = Set(first(m) for m in param_mapping)
     union!(consumed, Set(first(m) for m in state_mapping))
     ignored = Set(k for k in keys(state_dict) if endswith(k, ".num_batches_tracked"))
@@ -619,21 +619,21 @@ constructor paths):
   `Lux.setup` random initialization.
 """
 function _load_resnet(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = RESNET_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the classifier head is left at its Lux.setup random initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the classifier head is left at its Lux.setup random initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

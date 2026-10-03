@@ -5,20 +5,22 @@ export families_for_paths, ALL_FAMILIES, REPRESENTATIVE_VARIANT
 const _SHARED_PREFIXES =
     ("src/Layers/", "src/Interop/", "src/Models/ConvNeXtCommon/", "ci/")
 
-const _SHARED_EXACT = Set([
-    "src/Luximm.jl",
-    "src/Models/Models.jl",
-    "src/Models/FeatureInfo.jl",
-    "Project.toml",
-    "Manifest.toml",
-    "test/runtests.jl",
-    "test/_ci_driver.jl",
-    "test/_filter.jl",
-    "test/_parity_helpers.jl",
-    "test/_parity_tol.jl",
-])
+const _SHARED_EXACT = Set(
+    [
+        "src/Luximm.jl",
+        "src/Models/Models.jl",
+        "src/Models/FeatureInfo.jl",
+        "Project.toml",
+        "Manifest.toml",
+        "test/runtests.jl",
+        "test/_ci_driver.jl",
+        "test/_filter.jl",
+        "test/_parity_helpers.jl",
+        "test/_parity_tol.jl",
+    ]
+)
 
-const _FAMILY_PREFIXES = Dict{String,Tuple{Vararg{String}}}(
+const _FAMILY_PREFIXES = Dict{String, Tuple{Vararg{String}}}(
     "bit" => ("src/Models/ResNetV2/",),
     "resnet" => ("src/Models/ResNet/",),
     "convnext" => ("src/Models/ConvNeXt/",),
@@ -30,7 +32,7 @@ const _FAMILY_PREFIXES = Dict{String,Tuple{Vararg{String}}}(
     "infra" => (),
 )
 
-const _FAMILY_EXACT = Dict{String,Set{String}}(
+const _FAMILY_EXACT = Dict{String, Set{String}}(
     "bit" => Set(["test/test_bit_resnet.jl"]),
     "resnet" => Set(["test/test_resnet.jl"]),
     "convnext" => Set(["test/test_convnext.jl"]),
@@ -39,11 +41,13 @@ const _FAMILY_EXACT = Dict{String,Set{String}}(
     "seresnet" => Set(["test/test_seresnet.jl"]),
     "vit" => Set(["test/test_vit.jl"]),
     "coatnet" => Set(["test/test_coatnet.jl"]),
-    "infra" => Set([
-        "test/test_hf_download.jl",
-        "test/test_hf_hub_download.jl",
-        "test/test_init.jl",
-    ]),
+    "infra" => Set(
+        [
+            "test/test_hf_download.jl",
+            "test/test_hf_hub_download.jl",
+            "test/test_init.jl",
+        ]
+    ),
 )
 
 const ALL_FAMILIES = (
@@ -58,7 +62,7 @@ const ALL_FAMILIES = (
     "coatnet",
 )
 
-const REPRESENTATIVE_VARIANT = Dict{String,String}(
+const REPRESENTATIVE_VARIANT = Dict{String, String}(
     "infra" => "",
     "bit" => "resnetv2_50x1_bit_goog_in21k_ft_in1k",
     "resnet" => "resnet50_a1_in1k",

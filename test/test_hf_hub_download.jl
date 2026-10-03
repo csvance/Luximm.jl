@@ -76,7 +76,7 @@ end
         delete!(ENV, "HF_HUB_CACHE")
         delete!(ENV, "HF_HOME")
         @test hf_hub_cache_dir() ==
-              joinpath(expanduser("~"), ".cache", "huggingface", "hub")
+            joinpath(expanduser("~"), ".cache", "huggingface", "hub")
 
         ENV["HF_HOME"] = "/tmp/jimm_hf_home_test"
         @test hf_hub_cache_dir() == "/tmp/jimm_hf_home_test/hub"
@@ -86,7 +86,7 @@ end
     finally
         # restore env exactly as we found it
         saved[1] === nothing ? delete!(ENV, "HF_HUB_CACHE") :
-        (ENV["HF_HUB_CACHE"] = saved[1])
+            (ENV["HF_HUB_CACHE"] = saved[1])
         saved[2] === nothing ? delete!(ENV, "HF_HOME") : (ENV["HF_HOME"] = saved[2])
     end
 end

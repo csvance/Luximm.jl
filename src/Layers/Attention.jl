@@ -34,7 +34,7 @@ PyTorch keys map as: `attn.qkv.weight` → `(:qkv, :weight)` (`axis_reverse`),
 function mhsa(dim::Int; num_heads::Int, qkv_bias::Bool = true)
     head_dim = dim ÷ num_heads
     scale = Float32(1 / sqrt(head_dim))
-    @compact(
+    return @compact(
         qkv = Dense(dim => 3dim; use_bias = qkv_bias, init_bias = zeros32),
         proj = Dense(dim => dim; init_bias = zeros32),
     ) do x

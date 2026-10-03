@@ -41,10 +41,10 @@ Fields:
 """
 struct CoAtNetVariant
     name::Symbol
-    depths::NTuple{4,Int}
-    dims::NTuple{4,Int}
-    stem_width::NTuple{2,Int}
-    block_types::NTuple{4,Symbol}
+    depths::NTuple{4, Int}
+    dims::NTuple{4, Int}
+    stem_width::NTuple{2, Int}
+    block_types::NTuple{4, Symbol}
     stride_mode::Symbol
     attn_early::Bool
     se_act::Symbol
@@ -67,7 +67,7 @@ these to size the relative-position bias window.
 function coatnet_feat_sizes(cfg::CoAtNetVariant)
     feat = cfg.img_size ÷ 2          # after stem (stride 2)
     sizes = Int[]
-    for _ = 1:4
+    for _ in 1:4
         feat = (feat - 1) ÷ 2 + 1    # stage stride-2 downsample
         push!(sizes, feat)
     end
@@ -80,7 +80,7 @@ end
 Lookup table for the CoAtNet variants ported from timm. Keys are the timm model
 name with dots rewritten as underscores.
 """
-const COATNET_VARIANTS = Dict{Symbol,CoAtNetVariant}(
+const COATNET_VARIANTS = Dict{Symbol, CoAtNetVariant}(
     # coatnet_0: pool-stride MBConv, early SE (ReLU), bias-free transformer
     # shortcut, no LayerScale.
     :coatnet_0_rw_224_sw_in1k => CoAtNetVariant(

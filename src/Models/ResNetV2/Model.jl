@@ -63,8 +63,8 @@ end
 
 _bit_resnetv2_features(x, stem_conv, stage1, stage2, stage3, stage4, final_norm) =
     final_norm(
-        last(_bit_resnetv2_feature_taps(x, stem_conv, stage1, stage2, stage3, stage4)),
-    )
+    last(_bit_resnetv2_feature_taps(x, stem_conv, stage1, stage2, stage3, stage4)),
+)
 
 """
     bit_resnetv2_feature_info(cfg) -> FeatureInfo
@@ -91,7 +91,7 @@ function _bit_resnetv2_pyramid(cfg::BiTVariant, in_chans::Int, out_sel)
     widths = cfg.stage_chs
     strides = (1, 2, 2, 2)
     stem_chs = cfg.stem_chs
-    @compact(
+    return @compact(
         stem_conv = std_conv(
             7,
             7,
@@ -137,16 +137,16 @@ logits shaped `(num_classes, N)`, matching
 `timm.create_model(..., num_classes=num_classes).forward(x)`.
 """
 function bit_resnetv2(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     cfg = get(BIT_VARIANTS, variant) do
         error(
             "Unknown BiT variant: $variant. Known variants: " *
-            "$(sort(collect(keys(BIT_VARIANTS))))",
+                "$(sort(collect(keys(BIT_VARIANTS))))",
         )
     end
     depths = cfg.layers
@@ -160,7 +160,7 @@ function bit_resnetv2(
     end
     _check_out_indices_unused(variant, out_indices)
 
-    if num_classes == 0
+    return if num_classes == 0
         @compact(
             stem_conv = std_conv(
                 7,
@@ -240,7 +240,7 @@ end
 GroupNorm(groups, C; affine=true) followed by ReLU.
 """
 function gn_act(C::Int; groups::Int = 32, eps::Float32 = 1.0f-5)
-    @compact(gn = GroupNorm(C, groups; affine = true, epsilon = eps),) do x
+    return @compact(gn = GroupNorm(C, groups; affine = true, epsilon = eps)) do x
         @return NNlib.relu.(gn(x))
     end
 end
@@ -250,7 +250,7 @@ end
 function preact_bottleneck(in_ch::Int, out_ch::Int, stride::Int; downsample::Bool)
     mid = out_ch ÷ 4
 
-    if downsample
+    return if downsample
         @compact(
             norm1 = gn_act(in_ch),
             conv1 = std_conv(1, 1, in_ch, mid; init_weight = _BIT_CONV_INIT),
@@ -313,7 +313,7 @@ end
 function resnet_stage(in_ch::Int, out_ch::Int, depth::Int, stride::Int)
     blocks = []
     push!(blocks, preact_bottleneck(in_ch, out_ch, stride; downsample = true))
-    for _ = 2:depth
+    for _ in 2:depth
         push!(blocks, preact_bottleneck(out_ch, out_ch, 1; downsample = false))
     end
     return Chain(blocks...)
@@ -338,19 +338,19 @@ deliver conv weights in `(kW, kH, in, out)` order, which is Lux's `Conv`
 layout, so the `identity` transform is correct for every leaf.
 """
 function bit_resnetv2_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(BIT_VARIANTS, variant) do
         error(
             "Unknown BiT variant: $variant. Known variants: " *
-            "$(sort(collect(keys(BIT_VARIANTS))))",
+                "$(sort(collect(keys(BIT_VARIANTS))))",
         )
     end
-    mapping = Tuple{String,Tuple{Vararg{Symbol}},Function}[]
+    mapping = Tuple{String, Tuple{Vararg{Symbol}}, Function}[]
 
     # The released checkpoint always has the 3-channel stem weight; adapt it
     # on the fly when the model was built with a different in_chans, matching
@@ -363,10 +363,10 @@ function bit_resnetv2_mapping(
 
     for (s, depth) in enumerate(cfg.layers)
         stage_sym = Symbol("stage", s)
-        for b = 1:depth
+        for b in 1:depth
             layer_sym = Symbol("layer_", b)
             py_block = "stages.$(s - 1).blocks.$(b - 1)"
-            for n = 1:3
+            for n in 1:3
                 norm_sym = Symbol("norm", n)
                 conv_sym = Symbol("conv", n)
                 push!(
@@ -446,21 +446,21 @@ at `create_pretrained` time. Three classifier-head cases:
   left at its `Lux.setup` random initialization for them to train.
 """
 function _load_bit_resnetv2(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = BIT_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the classifier head is left at its Lux.setup random initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the classifier head is left at its Lux.setup random initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,

@@ -24,8 +24,8 @@ Fields:
 """
 struct SEResNetVariant
     name::Symbol
-    layers::NTuple{4,Int}
-    planes::NTuple{4,Int}
+    layers::NTuple{4, Int}
+    planes::NTuple{4, Int}
     num_features::Int
     hf_repo::String
     default_num_classes::Int
@@ -39,7 +39,7 @@ end
 Lookup table for the SE-ResNet variants ported from timm. Keys are the timm
 model name with dots rewritten as underscores.
 """
-const SERESNET_VARIANTS = Dict{Symbol,SEResNetVariant}(
+const SERESNET_VARIANTS = Dict{Symbol, SEResNetVariant}(
     :seresnet50_a1_in1k => SEResNetVariant(
         :seresnet50_a1_in1k,
         (3, 4, 6, 3),

@@ -44,7 +44,7 @@ const _DRIVER_ORDER = (
 )
 
 function _scaffold_testset()
-    @testset "Luximm scaffold" begin
+    return @testset "Luximm scaffold" begin
         @test isdefined(Luximm, :Interop)
         @test isdefined(Luximm, :Layers)
         @test isdefined(Luximm, :Models)
@@ -117,7 +117,7 @@ function _scaffold_testset()
 end
 
 function _dispatch_family(name::AbstractString)
-    if name == "infra"
+    return if name == "infra"
         _scaffold_testset()
         include(joinpath(@__DIR__, "test_hf_download.jl"))
         include(joinpath(@__DIR__, "test_hf_hub_download.jl"))
@@ -169,11 +169,11 @@ function _driver_main()
     ordered = [f for f in _DRIVER_ORDER if f in requested]
     overall = 0
     for fam in ordered
-        println(stdout, "==> JIMM_FAMILY_BEGIN: family=$(fam)");
+        println(stdout, "==> JIMM_FAMILY_BEGIN: family=$(fam)")
         flush(stdout)
         rc = _run_family(fam)
         rc == 0 || (overall = 1)
-        println(stdout, "==> JIMM_FAMILY_END: family=$(fam) rc=$(rc)");
+        println(stdout, "==> JIMM_FAMILY_END: family=$(fam) rc=$(rc)")
         flush(stdout)
     end
     return overall

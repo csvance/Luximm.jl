@@ -44,7 +44,7 @@ JIMM_CI_PRIVATE_KEY_FILE, JIMM_CI_REPO_OWNER, JIMM_CI_REPO_NAME, …).
 struct CliArgs
     dry_run::Bool
     master::Bool
-    sha::Union{String,Nothing}
+    sha::Union{String, Nothing}
     skip_pending::Bool
     help::Bool
 end
@@ -52,7 +52,7 @@ end
 function _parse_args(argv::AbstractVector)
     dry_run = false
     master = false
-    sha::Union{String,Nothing} = nothing
+    sha::Union{String, Nothing} = nothing
     skip_pending = false
     help = false
     i = 1
@@ -71,7 +71,7 @@ function _parse_args(argv::AbstractVector)
             i <= length(argv) || error("--sha requires a value")
             sha = argv[i]
         elseif startswith(a, "--sha=")
-            sha = a[(length("--sha=")+1):end]
+            sha = a[(length("--sha=") + 1):end]
         else
             error("unknown argument: $a")
         end
@@ -92,9 +92,10 @@ function _print_jobs(jobs::Vector{Job})
         pr_part = j.kind == Jobs.PR_JOB ? " pr=#$(j.pr_number)" : ""
         println(
             "$(j.label): sha=$(first(j.head_sha, 12)) " *
-            "families=$(join(j.families, ",")) scope=$(scope)$(pr_part)",
+                "families=$(join(j.families, ",")) scope=$(scope)$(pr_part)",
         )
     end
+    return
 end
 
 function _explicit_job(gh::GitHubApp, cfg::Config, args::CliArgs)
@@ -126,7 +127,7 @@ end
 
 function _run_explicit(cfg::Config, gh::GitHubApp, job::Job)
     builder = Builder(cfg, gh)
-    BuilderMod.run_job(builder, job; on_line = ln -> println(ln))
+    return BuilderMod.run_job(builder, job; on_line = ln -> println(ln))
 end
 
 function _skip_pending(cfg::Config, gh::GitHubApp)
@@ -140,6 +141,7 @@ function _skip_pending(cfg::Config, gh::GitHubApp)
         println("skipping $(first(j.head_sha, 12)): $(join(j.families, ","))")
         mark_skipped(gh, repo_fullname(cfg), j.head_sha, j.families; source = :skip)
     end
+    return
 end
 
 # ── Entry point ──────────────────────────────────────────────────────
@@ -161,7 +163,7 @@ function cli_main(argv::AbstractVector = ARGS)
     min_level =
         get(ENV, "JIMM_CI_LOG_LEVEL", "INFO") == "DEBUG" ? Logging.Debug : Logging.Info
     Logging.global_logger(ConsoleLogger(_logfile, min_level))
-    @info "jimm-ci starting" time=now(UTC)
+    @info "jimm-ci starting" time = now(UTC)
 
     cfg = try
         ConfigMod.from_env()
@@ -207,7 +209,7 @@ function (@main)(args::Vector{String})
             return 130
         end
         bt = catch_backtrace()
-        @error "fatal exception" exception=(e, bt)
+        @error "fatal exception" exception = (e, bt)
         showerror(stderr, e, bt)
         println(stderr)
         return 1

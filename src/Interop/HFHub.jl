@@ -99,12 +99,12 @@ Set `repo_type="dataset"` for dataset repos; default `"model"` matches
 `timm`'s usage.
 """
 function hf_hub_download(
-    repo_id::AbstractString,
-    filename::AbstractString;
-    revision::AbstractString = "main",
-    cache_dir::AbstractString = hf_hub_cache_dir(),
-    repo_type::AbstractString = "model",
-)
+        repo_id::AbstractString,
+        filename::AbstractString;
+        revision::AbstractString = "main",
+        cache_dir::AbstractString = hf_hub_cache_dir(),
+        repo_type::AbstractString = "model",
+    )
     repo_prefix = repo_type == "model" ? "models" : repo_type * "s"
     repo_dir = joinpath(cache_dir, repo_prefix * "--" * replace(repo_id, "/" => "--"))
     refs_path = joinpath(repo_dir, "refs", revision)
@@ -167,7 +167,7 @@ end
 # -- helpers ------------------------------------------------------------
 
 function _hf_headers()
-    headers = Pair{String,String}[]
+    headers = Pair{String, String}[]
     token = get(ENV, "HUGGING_FACE_HUB_TOKEN", "")
     isempty(token) || push!(headers, "Authorization" => "Bearer $token")
     return headers
@@ -205,7 +205,7 @@ function _hf_head_metadata(url::AbstractString)
     if isempty(commit_sha) || isempty(blob_id)
         error(
             "HEAD $url did not return commit/etag headers " *
-            "(commit=$(commit_sha), etag=$(blob_id))",
+                "(commit=$(commit_sha), etag=$(blob_id))",
         )
     end
     return (String(commit_sha), String(blob_id))

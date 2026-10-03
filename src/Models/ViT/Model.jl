@@ -80,7 +80,7 @@ end
 # `forward_intermediates(..., norm=False, output_fmt='NCHW')`. `indices` is
 # a compile-time-constant tuple, so the `map` unrolls and the returned tuple
 # stays type-stable.
-_vit_feature_selector(indices::NTuple{K,Int}, grid::Int) where {K} =
+_vit_feature_selector(indices::NTuple{K, Int}, grid::Int) where {K} =
     taps -> map(i -> _vit_token_grid(taps[i], grid), indices)
 
 # `num_classes = 0` feature extractor and classifier entry point: the full
@@ -126,10 +126,12 @@ function _vit_backbone(cfg::ViTVariant, in_chans::Int, variant::Symbol, out_sel)
     # keeps one forward for both CLIP and ImageNet variants.
     norm_pre = cfg.pre_norm ? vit_layernorm(D; eps = eps) : identity
     blocks = (;
-        (Symbol("layer_", i) =>
-         vit_block(D; num_heads = cfg.num_heads, eps = eps) for i = 1:cfg.depth)...,
+        (
+            Symbol("layer_", i) =>
+                vit_block(D; num_heads = cfg.num_heads, eps = eps) for i in 1:cfg.depth
+        )...,
     )
-    @compact(
+    return @compact(
         patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
         cls_token = zeros32(D, 1, 1),
         pos_embed = zeros32(D, T, 1),
@@ -170,16 +172,16 @@ The input spatial size must equal the variant's native `img_size`; the
 absolute position embedding has no interpolation path yet.
 """
 function vit(
-    variant::Symbol;
-    in_chans::Int = 3,
-    num_classes::Int = 0,
-    features_only::Bool = false,
-    out_indices = nothing,
-)
+        variant::Symbol;
+        in_chans::Int = 3,
+        num_classes::Int = 0,
+        features_only::Bool = false,
+        out_indices = nothing,
+    )
     cfg = get(VIT_VARIANTS, variant) do
         error(
             "Unknown ViT variant: $variant. Known variants: " *
-            "$(sort(collect(keys(VIT_VARIANTS))))",
+                "$(sort(collect(keys(VIT_VARIANTS))))",
         )
     end
     if features_only
@@ -204,11 +206,13 @@ function vit(
     # keeps one forward for both CLIP and ImageNet variants.
     norm_pre = cfg.pre_norm ? vit_layernorm(D; eps = eps) : identity
     blocks = (;
-        (Symbol("layer_", i) =>
-         vit_block(D; num_heads = cfg.num_heads, eps = eps) for i = 1:cfg.depth)...,
+        (
+            Symbol("layer_", i) =>
+                vit_block(D; num_heads = cfg.num_heads, eps = eps) for i in 1:cfg.depth
+        )...,
     )
     nc = num_classes
-    @compact(
+    return @compact(
         patch = patch_embed(in_chans, D; patch = cfg.patch, use_bias = cfg.stem_bias),
         cls_token = zeros32(D, 1, 1),
         pos_embed = zeros32(D, T, 1),
@@ -228,7 +232,7 @@ end
 
 # -- Pretrained-weight loading -------------------------------------------
 
-_VIT_MAPPING_ENTRY = Tuple{String,Tuple{Vararg{Symbol}},Function}
+_VIT_MAPPING_ENTRY = Tuple{String, Tuple{Vararg{Symbol}}, Function}
 
 """
     vit_mapping(state_dict, variant; load_classifier=false, in_chans=3,
@@ -245,16 +249,16 @@ weights (`qkv`, `proj`, `mlp.fc1/fc2`, `head`) use `axis_reverse`; their biases
 and the 1-D norm params use `identity`.
 """
 function vit_mapping(
-    state_dict::Dict,
-    variant::Symbol;
-    load_classifier::Bool = false,
-    in_chans::Int = 3,
-    prefix::Tuple{Vararg{Symbol}} = (),
-)
+        state_dict::Dict,
+        variant::Symbol;
+        load_classifier::Bool = false,
+        in_chans::Int = 3,
+        prefix::Tuple{Vararg{Symbol}} = (),
+    )
     cfg = get(VIT_VARIANTS, variant) do
         error(
             "Unknown ViT variant: $variant. Known variants: " *
-            "$(sort(collect(keys(VIT_VARIANTS))))",
+                "$(sort(collect(keys(VIT_VARIANTS))))",
         )
     end
     mapping = _VIT_MAPPING_ENTRY[]
@@ -282,7 +286,7 @@ function vit_mapping(
         push!(mapping, ("norm_pre.bias", (prefix..., :norm_pre, :bias), as_token_norm))
     end
 
-    for n = 1:cfg.depth
+    for n in 1:cfg.depth
         blk = (prefix..., :blocks, Symbol("layer_", n))
         py = "blocks.$(n - 1)"
         push!(mapping, ("$(py).norm1.weight", (blk..., :norm1, :scale), as_token_norm))
@@ -324,21 +328,21 @@ returned unchanged (LayerNorm has no running statistics). The classifier-head
 handling matches the other families' three cases.
 """
 function _load_vit(
-    ps,
-    st,
-    variant::Symbol;
-    in_chans::Int,
-    num_classes::Int,
-    revision::AbstractString,
-    cache_dir::AbstractString,
-    prefix::Tuple{Vararg{Symbol}},
-)
+        ps,
+        st,
+        variant::Symbol;
+        in_chans::Int,
+        num_classes::Int,
+        revision::AbstractString,
+        cache_dir::AbstractString,
+        prefix::Tuple{Vararg{Symbol}},
+    )
     cfg = VIT_VARIANTS[variant]
     load_classifier = num_classes > 0 && num_classes == cfg.default_num_classes
     if num_classes > 0 && num_classes != cfg.default_num_classes
         @warn "variant $variant ships $(cfg.default_num_classes)-class pretrained weights, " *
-              "but the model has a $num_classes-class head. Loading the backbone only; " *
-              "the classifier head is left at its Lux.setup random initialization for you to train."
+            "but the model has a $num_classes-class head. Loading the backbone only; " *
+            "the classifier head is left at its Lux.setup random initialization for you to train."
     end
     path = hf_hub_download(
         cfg.hf_repo,
