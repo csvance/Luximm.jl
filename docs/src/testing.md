@@ -256,8 +256,9 @@ release.
 
 `scripts/parity_sweep.sh` runs it: `uv sync`, dump every missing
 fixture (both `in_chans` and the `features_only` pyramids), run
-`Pkg.test()` over every family, and write the log and the CSV report
-to a per-run directory, ending with a summary of failed checks,
+`Pkg.test()` over the parity families (`JIMM_TEST_FAMILIES=all` adds
+the unit families, which CI already runs), and write the log and the
+CSV report to a per-run directory, ending with a summary of failed checks,
 skipped checks and failed dumps. Machine-specific settings go in a
 git-ignored launcher:
 

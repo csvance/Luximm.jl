@@ -21,8 +21,9 @@
 #   HF_TOKEN            optional; read from $HF_HOME/token when unset
 #   JIMM_TEST_FAMILIES, JIMM_TEST_VARIANTS
 #                       scope the run, for the dumps as well as the tests
-#                       (see test/_filter.jl). Neither set: every family,
-#                       parity and unit alike.
+#                       (see test/_filter.jl). Neither set: the parity
+#                       families only; CI runs the unit families. Set
+#                       JIMM_TEST_FAMILIES=all to run both.
 #
 # Each run writes runs/<timestamp>-<sha>/ (under LUXIMM_DATA, or the repo's
 # data/ when it is unset) with sweep.log and parity_report.csv. Exits non-zero
@@ -60,9 +61,10 @@ fi
 # CoAtNet's in12k repos use Xet storage, which stalls on some networks.
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
-# A plain Pkg.test() runs only the unit families; a sweep runs everything.
+# A plain Pkg.test() runs only the unit families, which CI covers; a sweep runs the
+# parity families, so their results do not wait behind the unit tests.
 if [[ -z "${JIMM_TEST_FAMILIES:-}" && -z "${JIMM_TEST_VARIANTS:-}" ]]; then
-    export JIMM_TEST_FAMILIES=all
+    export JIMM_TEST_FAMILIES=parity
 fi
 
 sha=$(git rev-parse --short HEAD)
@@ -81,7 +83,7 @@ echo "[sweep] commit $(git rev-parse HEAD)"
 echo "[sweep] run dir       $run_dir"
 echo "[sweep] HF_HOME       ${HF_HOME:-<default>}"
 echo "[sweep] fixtures      ${JIMM_PARITY_DIR:-$repo_root/data/parity}"
-echo "[sweep] families      ${JIMM_TEST_FAMILIES:-<all>}"
+echo "[sweep] families      ${JIMM_TEST_FAMILIES:-<from variants>}"
 echo "[sweep] variants      ${JIMM_TEST_VARIANTS:-<all>}"
 echo "[sweep] HF token      $([[ -n "${HF_TOKEN:-}" ]] && echo set || echo "not set (anonymous downloads)")"
 
