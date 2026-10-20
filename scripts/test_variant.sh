@@ -131,6 +131,9 @@ if [[ -f "$fixture" && "$force" -ne 1 ]]; then
 else
     if [[ "$force" -eq 1 && -f "$fixture" ]]; then
         echo "[test_variant] --force set; re-dumping $fixture"
+        # Every sidecar skips a fixture that already exists, so --force has to
+        # remove it first or the re-dump is a silent no-op.
+        rm -f "$fixture"
     else
         echo "[test_variant] fixture $fixture missing; dumping via $sidecar"
     fi

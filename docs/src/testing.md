@@ -94,7 +94,10 @@ A parity fixture is an HDF5 file produced by one of the Python
 sidecars under `test/parity/`. It contains:
 
 - `/input`: deterministic `torch.randn` input in PyTorch NCHW
-  layout.
+  layout, with a batch of two distinct samples (`PARITY_BATCH` in
+  `test/parity/_dump_common.py`). At batch 1, a forward that mixes
+  the batch axis into tokens, heads or a reduction would still match
+  exactly; at batch 2 it fails.
 - `/state_dict/<key>`: every PyTorch parameter, keyed by its
   `state_dict` name.
 - `/output/features`: the result of `model.forward_features(input)`.

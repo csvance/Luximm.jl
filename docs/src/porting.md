@@ -97,7 +97,7 @@ convention. Look at `test/parity/dump_resnetv2_bit_io.py` for the
 template.
 
 The fixture stores `/input` (deterministic random input, PyTorch NCHW
-layout), `/state_dict/<key>` for every PyTorch parameter, and
+layout, batch of two), `/state_dict/<key>` for every PyTorch parameter, and
 `/output/features` plus optional `/output/logits`. The Julia side
 reads it via `Luximm.Interop.read_parity`, which reverses the axes so
 tensors arrive in Lux's WHCN layout.

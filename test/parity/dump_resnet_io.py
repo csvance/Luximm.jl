@@ -2,7 +2,7 @@
 
 For each variant in `RESNET_VARIANTS_FULL`, writes a small HDF5 fixture:
 
-    /input                       deterministic torch.randn (seeded), NCHW
+    /input                       deterministic torch.randn (seeded), NCHW, batch 2
     /output/features             timm forward_features(x)
     /output/logits               timm forward(x), only at in_chans=3
     /state_dict/<no entries>     placeholder group; weights load live from HF
@@ -24,7 +24,7 @@ import timm
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _dump_common import dump
+from _dump_common import PARITY_BATCH, dump
 
 
 RESNET_VARIANTS_FULL: Mapping[str, str] = {
@@ -62,7 +62,7 @@ def run_one(
     model = timm.create_model(full_name, pretrained=True, in_chans=in_chans).eval()
     _cfg_c, height, width = model.default_cfg["input_size"]
     gen = torch.Generator().manual_seed(seed)
-    x = torch.randn(1, in_chans, height, width, generator=gen)
+    x = torch.randn(PARITY_BATCH, in_chans, height, width, generator=gen)
 
     with torch.no_grad():
         feats = model.forward_features(x)

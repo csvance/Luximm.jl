@@ -3,7 +3,7 @@
 For each timm ConvNeXtV2 variant in `CONVNEXTV2_VARIANTS_FULL`, writes a small
 HDF5 fixture containing:
 
-    /input                       deterministic torch.randn (seeded), NCHW
+    /input                       deterministic torch.randn (seeded), NCHW, batch 2
     /output/features             timm forward_features(x), post-stages
     /output/logits               timm forward(x), only for variants that ship
                                  a trained classification head
@@ -36,7 +36,7 @@ import timm
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _dump_common import dump
+from _dump_common import PARITY_BATCH, dump
 
 
 # Maps Julia variant key -> full timm model name. Must stay in sync with
@@ -133,7 +133,7 @@ def run_one(
     cfg_c, height, width = model.default_cfg["input_size"]
     c = in_chans if in_chans is not None else cfg_c
     gen = torch.Generator().manual_seed(seed)
-    x = torch.randn(1, c, height, width, generator=gen)
+    x = torch.randn(PARITY_BATCH, c, height, width, generator=gen)
 
     with torch.no_grad():
         feats = model.forward_features(x)
