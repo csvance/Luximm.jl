@@ -37,10 +37,10 @@ on:
 permissions:
   contents: read
 
-# A newer PR run cancels the old one. Master runs finish.
+# A newer push cancels the run still in progress for the same branch or PR, master included.
 concurrency:
   group: tests-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   test:

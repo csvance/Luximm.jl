@@ -14,6 +14,11 @@ using Statistics
 using LinearAlgebra: norm
 using Reactant, Enzyme, ForwardDiff
 
+# Run on Reactant's CPU client only. Without this, Reactant's first array call probes CUDA as
+# well, and on a machine with an NVIDIA driver but no visible GPU it logs a long, harmless
+# "Failed to initialize client: cuda" error before falling back to the CPU.
+Reactant.set_default_backend("cpu")
+
 const NormLayers = Luximm.Layers
 
 function ref_layernorm(x, γ, β, dims, ϵ)
