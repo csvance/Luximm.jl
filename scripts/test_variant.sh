@@ -168,4 +168,5 @@ fi
 [[ "$dump_only" -eq 1 ]] && exit 0
 
 echo "[test_variant] running Julia test for $variant"
-JIMM_TEST_VARIANTS="$variant" julia --project=. -e 'using Pkg; Pkg.test()'
+# --check-bounds=auto reuses the normal package-image cache (see scripts/parity_sweep.sh).
+JIMM_TEST_VARIANTS="$variant" julia --project=. -e 'using Pkg; Pkg.test(; julia_args = ["--check-bounds=auto"])'

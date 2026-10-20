@@ -1,0 +1,63 @@
+name: Tests
+
+# The unit families (infra, interface, reactant): what a plain `Pkg.test()` runs. No parity
+# fixtures or pretrained weights; the parity families run by hand via scripts/parity_sweep.sh.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'skills/**'
+      - 'scripts/**'
+      - 'test/parity/**'
+      - '.claude-plugin/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/format.yml'
+      - '.github/workflows/TagBot.yml'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'skills/**'
+      - 'scripts/**'
+      - 'test/parity/**'
+      - '.claude-plugin/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/format.yml'
+      - '.github/workflows/TagBot.yml'
+
+permissions:
+  contents: read
+
+# A newer push cancels the run still in progress for the same branch or PR, master included.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      # Pkg.test defaults to --check-bounds=yes, and package images are cached per
+      # check-bounds setting, so the test process would precompile every dependency a second
+      # time instead of reusing julia-buildpkg's. Coverage is off for the same reason (and
+      # nothing uploads it).
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          check_bounds: 'auto'
+          coverage: false

@@ -139,7 +139,8 @@ function create_model(variant::Symbol; kwargs...)
         error(
             "Unknown variant: $variant. Not found in any of " *
                 "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS, SERESNET_VARIANTS, " *
+                "VIT_VARIANTS, COATNET_VARIANTS.",
         )
     end
 end
@@ -172,7 +173,8 @@ function default_num_classes(variant::Symbol)
         error(
             "Unknown variant: $variant. Not found in any of " *
                 "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS, SERESNET_VARIANTS, " *
+                "VIT_VARIANTS, COATNET_VARIANTS.",
         )
     end
 end
@@ -222,7 +224,8 @@ function feature_info(variant::Symbol; out_indices = nothing)
         error(
             "Unknown variant: $variant. Not found in any of " *
                 "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS, SERESNET_VARIANTS, " *
+                "VIT_VARIANTS, COATNET_VARIANTS.",
         )
     end
     return select_features(full, resolve_out_indices(full, out_indices, variant))
@@ -266,7 +269,9 @@ backbone, load_backbone = create_pretrained(:resnet50_a1_in1k;
     num_classes = 0, prefix = (:backbone,))
 outer = @compact(backbone = backbone,
     head = Dense(2048 => num_outputs)) do x
-    head(backbone(x))
+    feats = backbone(x)                                  # (7, 7, 2048, N)
+    pooled = NNlib.meanpool(feats, size(feats)[1:2])     # (1, 1, 2048, N)
+    head(reshape(pooled, size(pooled, 3), size(pooled, 4)))
 end
 ps, st = Lux.setup(rng, outer)
 ps, st = load_backbone(ps, st)
@@ -432,7 +437,8 @@ function _load_pretrained(
         error(
             "Unknown variant: $variant. Not found in any of " *
                 "BIT_VARIANTS, RESNET_VARIANTS, CONVNEXT_VARIANTS, " *
-                "CONVNEXTV2_VARIANTS, VGG_VARIANTS.",
+                "CONVNEXTV2_VARIANTS, VGG_VARIANTS, SERESNET_VARIANTS, " *
+                "VIT_VARIANTS, COATNET_VARIANTS.",
         )
     end
 end

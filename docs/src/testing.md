@@ -17,6 +17,30 @@ Set `JIMM_PARITY_REPORT` to a file path to also append one CSV row
 per check (`variant,check,rel_l2,cosine,max_abs,pass`), which makes a
 full sweep easy to review.
 
+Those parity tests are heavy (every variant's weights), so they are
+not what a plain `Pkg.test()` runs. The suite has two kinds of test
+family:
+
+- **Unit families**, run by `Pkg.test()` and by the GitHub Actions
+  `Tests` workflow. No fixtures and no pretrained weights.
+  - `infra`: init recipes, raw HuggingFace downloads, and the Hub
+    cache layout.
+  - `interface`: every registered variant builds; one small variant
+    per family produces the advertised output shapes and
+    `feature_info` tap table, handles `num_classes = 0` and
+    `in_chans = 1`, and treats batch elements independently; the
+    vendored normalization layers keep Lux's parameter trees; and
+    the two ConvNeXt block layouts agree.
+  - `reactant`: the Reactant extension. Its normalization statistics,
+    their gradients and their Hessian-vector products match plain
+    `Statistics` definitions differentiated with ForwardDiff (Float64,
+    to `1e-10`), and a compiled ConvNeXt V2 and BiT forward matches
+    the host forward.
+- **Parity families**, one per backbone (`bit`, `resnet`, `convnext`,
+  `convnextv2`, `vgg`, `seresnet`, `vit`, `coatnet`), run only when
+  asked for: by the full sweep, by `scripts/test_variant.sh`, or by
+  the variables below.
+
 This page covers the layout of the test suite, how to scope a run
 to a single variant, how to dump the HDF5 fixture a parity test
 consumes, and how the full sweep is run.
@@ -27,66 +51,62 @@ Everything lives under `test/`:
 
 ```
 test/
-├── runtests.jl         # entry point
-├── _filter.jl          # env-var-driven family/variant filtering
-├── parity/             # Python sidecars that produce HDF5 fixtures
+├── runtests.jl          # entry point
+├── _filter.jl           # families, and env-var-driven family/variant filtering
+├── _parity_helpers.jl   # shared parity scaffolding
+├── _parity_tol.jl       # PARITY_RTOL and check_parity
+├── parity/              # Python sidecars that produce HDF5 fixtures
 │   ├── _dump_common.py
-│   ├── dump_resnet_io.py
-│   ├── dump_resnetv2_bit_io.py
-│   ├── dump_convnext_io.py
-│   └── dump_convnextv2_io.py
-├── test_resnet.jl      # ResNet parity sweep
-├── test_bit_resnet.jl  # BiT ResNetV2 parity sweep
-├── test_convnext.jl    # ConvNeXt v1 parity sweep
-├── test_convnextv2.jl  # ConvNeXtV2 parity sweep
-├── test_init.jl        # Init-recipe parity (random-init)
-├── test_hf_download.jl # Raw HF download path
-└── test_hf_hub_download.jl  # HF Hub cache layout
+│   ├── dump_<family>_io.py
+│   └── dump_features_only_io.py
+├── test_interface.jl    # interface family
+├── test_reactant.jl     # reactant family
+├── test_init.jl         # infra: init recipes (random init)
+├── test_hf_download.jl  # infra: raw HF download path
+├── test_hf_hub_download.jl  # infra: HF Hub cache layout
+└── test_<family>.jl     # one parity family per backbone
 ```
 
-`runtests.jl` consults `_filter.jl` to decide which family files to
-include. Each family file iterates over a tuple of variant keys and
-either runs a parity test against an existing HDF5 fixture or skips
-the variant if its fixture is missing under `data/parity/`.
-
-The three "infra" test files (`test_init.jl`, `test_hf_download.jl`,
-`test_hf_hub_download.jl`) cover the cross-cutting concerns: init
-recipes, raw HuggingFace downloads, and the Hub cache layout. They
-run as the `infra` family.
+`runtests.jl` walks the `FAMILY_FILES` table in `_filter.jl` and
+includes the files of every enabled family. Each parity file iterates
+over its family's variants and either runs the parity checks against
+the variant's HDF5 fixture or skips the variant if its fixture is
+missing.
 
 ## Scoping a run with environment variables
 
-A full parity sweep downloads every released checkpoint and runs a
-forward through every variant. That is the right thing to do on the
-CI server, but on a developer machine it is overkill. Two
-environment variables narrow what runs without editing files:
+Two environment variables choose what runs without editing files:
 
+- `JIMM_TEST_FAMILIES`: comma-separated list of families, `parity`
+  for every parity family, or `all`. When set, this is authoritative
+  and overrides the family inference from `JIMM_TEST_VARIANTS`.
 - `JIMM_TEST_VARIANTS`: comma-separated variant keys (e.g.
-  `convnextv2_atto_fcmae`). Setting this alone also restricts the
-  active families to whichever ones contain the listed variants and
-  drops the `infra` family, so a single variant key is enough to
-  scope a run.
-- `JIMM_TEST_FAMILIES`: comma-separated list of families. Recognized
-  values are `infra`, `bit`, `resnet`, `convnext`, `convnextv2`.
-  When set, this is authoritative and overrides the family
-  inference from `JIMM_TEST_VARIANTS`. Unset and
-  `JIMM_TEST_VARIANTS` also unset means every family runs.
+  `convnextv2_atto_fcmae`) to keep inside each parity family. Setting
+  this alone selects the parity families that contain the listed
+  variants, so a single variant key is enough to scope a run.
+
+Neither set means the unit families.
 
 ```
+# The unit families (what CI runs):
+julia --project -e 'using Pkg; Pkg.test()'
+
 # Just the ConvNeXtV2 atto fcmae parity tests, nothing else:
 JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
     julia --project -e 'using Pkg; Pkg.test()'
 
-# Include the infra checks alongside a single backbone variant:
-JIMM_TEST_FAMILIES=infra,convnextv2 \
+# The unit checks alongside a single backbone variant:
+JIMM_TEST_FAMILIES=infra,interface,reactant,convnextv2 \
 JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
     julia --project -e 'using Pkg; Pkg.test()'
 ```
 
 Parity tests also skip when their HDF5 fixture is missing under
-`data/parity/`, so a contributor can dump one variant's fixture
-(and optionally its `_in1c` companion) and run just that one
-without touching the test code.
+`data/parity/` (or `JIMM_PARITY_DIR`), so a contributor can dump one
+variant's fixture (and optionally its `_in1c` companion) and run just
+that one without touching the test code. They skip entirely when
+`HF_OFFLINE=1` is set, since they need the HuggingFace weights;
+`scripts/parity_sweep.sh` refuses to run with it set.
 
 ## Parity fixtures
 
@@ -98,8 +118,10 @@ sidecars under `test/parity/`. It contains:
   `test/parity/_dump_common.py`). At batch 1, a forward that mixes
   the batch axis into tokens, heads or a reduction would still match
   exactly; at batch 2 it fails.
-- `/state_dict/<key>`: every PyTorch parameter, keyed by its
-  `state_dict` name.
+- `/state_dict`: an empty placeholder group. The tests load the
+  released `model.safetensors` from HuggingFace through
+  `create_pretrained`, so a parity run needs network access or a warm
+  HuggingFace cache.
 - `/output/features`: the result of `model.forward_features(input)`.
 - `/output/logits` (when the variant ships a trained head): the
   result of `model.forward(input)`.
@@ -112,9 +134,10 @@ not redistributed.
 The Julia side consumes fixtures via `Luximm.Interop.read_parity`, which
 returns a NamedTuple `(input, state_dict, output)` with all arrays
 already axis-reversed from PyTorch NCHW into Lux's WHCN layout. The
-mapping function for the family then routes each state-dict key
-into the corresponding Lux parameter path via
-[`apply_state_dict`](@ref).
+parity helpers in `test/_parity_helpers.jl` build the model with
+[`create_pretrained`](@ref), load the HuggingFace weights, run
+`fixture.input` through it and compare against `fixture.output` with
+`check_parity`.
 
 ### The `features_only` fixture
 
@@ -223,17 +246,21 @@ on `PATH`.
 
 ## CI
 
-The parity suite does not run on hosted CI: a full sweep needs every
-variant's `timm` weights and a PyTorch environment to dump the
-fixtures, which is more disk and CPU than a hosted runner offers. The
-maintainer runs the full sweep by hand on a machine with a large disk,
-on CPU in FP32, before each release.
+The `Tests` workflow (`.github/workflows/tests.yml`) runs the unit
+families on pushes to master and on pull requests that touch code. The parity suite does not run
+on hosted CI: a full sweep needs every variant's `timm` weights and a
+PyTorch environment to dump the fixtures, which is more disk and CPU
+than a hosted runner offers. The maintainer runs the full sweep by
+hand on a machine with a large disk, on CPU in FP32, before each
+release.
 
 `scripts/parity_sweep.sh` runs it: `uv sync`, dump every missing
 fixture (both `in_chans` and the `features_only` pyramids), run
-`Pkg.test()`, and write the log and the CSV report to a per-run
-directory, ending with a summary of failed checks, skipped checks and
-failed dumps. Machine-specific settings go in a git-ignored launcher:
+`Pkg.test()` over the parity families (`JIMM_TEST_FAMILIES=all` adds
+the unit families, which CI already runs), and write the log and the
+CSV report to a per-run directory, ending with a summary of failed checks,
+skipped checks and failed dumps. Machine-specific settings go in a
+git-ignored launcher:
 
 ```
 cp scripts/parity_env.example.sh scripts/parity_env.sh
@@ -245,7 +272,7 @@ JIMM_TEST_FAMILIES=convnextv2 scripts/parity_env.sh    # one backbone family
 `JIMM_TEST_FAMILIES` and `JIMM_TEST_VARIANTS` scope the dumps as well
 as the tests, so a scoped sweep only downloads the weights it uses.
 
-The hosted GitHub Actions workflows cover what needs neither weights
-nor fixtures: `.github/workflows/format.yml` checks Runic formatting,
-and `.github/workflows/docs.yml` builds and deploys this
-documentation site.
+The other hosted workflows need neither weights nor fixtures either:
+`.github/workflows/format.yml` checks Runic formatting, and
+`.github/workflows/docs.yml` builds and deploys this documentation
+site.

@@ -5,6 +5,7 @@ using NNlib
 using Statistics
 
 include("Init.jl")
+include("Normalization.jl")
 include("StdConv.jl")
 include("LayerNorm2d.jl")
 include("GRN.jl")

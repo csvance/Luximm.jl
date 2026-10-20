@@ -1,15 +1,15 @@
 # HDF5 parity-fixture loader and weight-mapping helper.
 #
-# Vendored from MMILux.jl/src/Parity.jl. Kept byte-identical in function
-# signatures and docstrings so that the `timm-to-lux` skill snippets
-# at recipes/julia/skills/timm-to-lux/SKILL.md apply to both packages
-# without modification.
+# The `timm-to-lux` skill (skills/timm-to-lux/SKILL.md) documents how a port
+# uses these functions.
 #
 # Fixtures are written by the Python sidecars in test/parity/ and have layout:
 #
 #   /input              dataset
 #   /output             dataset OR group with one dataset per named output
-#   /state_dict/<key>   dataset per PyTorch state_dict entry
+#   /state_dict/<key>   dataset per PyTorch state_dict entry; empty in the
+#                       committed parity fixtures (the tests load the weights
+#                       from HuggingFace), populated in debugging fixtures
 #
 # All tensors are stored in their **native PyTorch row-major byte order**.
 # HDF5.jl reads them back as Julia arrays whose axes are **reversed** relative
@@ -131,7 +131,7 @@ pyperm(perm) = a -> Float32.(permutedims(a, perm))
     as_channel4d(a) -> Array
 
 Reshape a `(C,)` PyTorch norm parameter into `(1, 1, C, 1)`, the shape used
-by `Lux.LayerNorm((1, 1, C); dims = 3)` (and so by `Luximm.Layers.layernorm2d`)
+by `Luximm.Layers.layernorm2d` (a `LuximmLayerNorm`, with the parameter tree of `Lux.LayerNorm((1, 1, C); dims = 3)`)
 for its `:scale` / `:bias` leaves on WHCN 4D inputs.
 """
 as_channel4d(a::AbstractArray) = reshape(Float32.(a), 1, 1, :, 1)

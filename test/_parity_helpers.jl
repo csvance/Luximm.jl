@@ -1,5 +1,5 @@
-# Shared scaffolding for the per-family parity test files
-# (test_convnextv2.jl, test_convnext.jl, test_resnet.jl, test_bit_resnet.jl).
+# Shared scaffolding for the per-family parity test files (every
+# `test/test_<family>.jl` parity file).
 #
 # Each family file is a thin shell: a variant list, an outer @testset for the
 # family name, and a loop that loads the fixture, skips when missing or

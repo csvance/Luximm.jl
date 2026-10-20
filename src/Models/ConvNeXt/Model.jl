@@ -155,9 +155,8 @@ function convnext_block_cl(
         w, h, _, n = size(y)
         y = permutedims(y, (3, 1, 2, 4))                     # (C, W, H, N)
         # layernorm2d's LayerNorm, over the now contiguous channel axis; its eps is 1f-6.
-        y = Lux.LuxLib.layernorm(
-            y, reshape(norm.ps.scale, C, 1, 1, 1),
-            reshape(norm.ps.bias, C, 1, 1, 1), identity, 1, 1.0f-6
+        y = Layers.layernorm(
+            y, reshape(norm.ps.scale, C, 1, 1, 1), reshape(norm.ps.bias, C, 1, 1, 1), 1, 1.0f-6
         )
         y = reshape(fc1.ps.weight, C, H)' * reshape(y, C, :) .+ fc1.ps.bias   # (H, W*H*N)
         y = NNlib.gelu_erf.(y)                               # exact GELU, as in convnext_block

@@ -1,7 +1,7 @@
 # BiT ResNetV2 parity tests against timm reference outputs.
 #
 # Each test:
-#   1. Reads a Python-dumped HDF5 fixture (data/parity/resnetv2_<key>_bit_io.h5)
+#   1. Reads a Python-dumped HDF5 fixture (data/parity/<variant_key>_io.h5)
 #      containing the deterministic input and timm's forward_features /
 #      forward outputs for that variant.
 #   2. Downloads the variant's model.safetensors from HuggingFace (cached on
@@ -9,8 +9,8 @@
 #   3. Builds the Luximm model, applies the weights, and asserts the relative L2 error
 #      against the timm reference is under `PARITY_RTOL`.
 #
-# Skipped if the fixture file is missing or HF_OFFLINE=1 is set in env (so
-# CI without network or fixtures can still pass the rest of the suite).
+# Skipped if the fixture file is missing or HF_OFFLINE=1 is set in env (so a
+# run without network or fixtures still passes the rest of the suite).
 
 using Test
 using Luximm

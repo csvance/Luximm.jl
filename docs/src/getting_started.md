@@ -55,8 +55,8 @@ A few things worth noting in the snippet:
 
 - Variant keys are Julia symbols. `:resnet50_a1_in1k` is the `timm`
   model name `resnet50.a1_in1k` with the dot rewritten as an
-  underscore. The full name with the dot is at
-  `RESNET_VARIANTS[:resnet50_a1_in1k].hf_repo`.
+  underscore. The HuggingFace repo id, `timm/resnet50.a1_in1k`,
+  is at `RESNET_VARIANTS[:resnet50_a1_in1k].hf_repo`.
 - `create_pretrained` defaults `num_classes` to the variant's
   `default_num_classes` (1000 for the `resnet50.a1_in1k` ImageNet
   checkpoint). Pass an explicit `num_classes = 0` for a features-only
@@ -217,9 +217,13 @@ single-channel input three times.
 `create_pretrained` returns the backbone and a closure that already
 knows the variant; pass `prefix = (:backbone,)` so the closure writes
 into the right subtree of the outer `Lux.setup` result. The backbone
-itself goes into the outer `@compact` block as a value:
+itself goes into the outer `@compact` block as a value. A
+`num_classes = 0` backbone returns a `(W, H, C, N)` feature map, so the
+head pools it first (the examples in this section use `NNlib`):
 
 ```julia
+using NNlib
+
 backbone, load_backbone = create_pretrained(:resnet50_a1_in1k;
     num_classes = 0, prefix = (:backbone,))
 
@@ -227,7 +231,9 @@ outer = @compact(
     backbone = backbone,
     head     = Dense(2048 => num_outputs),
 ) do x
-    head(backbone(x))
+    feats  = backbone(x)                                # (7, 7, 2048, N)
+    pooled = NNlib.meanpool(feats, size(feats)[1:2])    # (1, 1, 2048, N)
+    head(reshape(pooled, size(pooled, 3), size(pooled, 4)))
 end
 
 ps, st = Lux.setup(Xoshiro(0), outer)
@@ -257,8 +263,9 @@ outer = @compact(
     resnet50_b = backbone_b,
     head       = Dense(4096 => num_outputs),
 ) do x
-    feats = cat(resnet50_a(x), resnet50_b(x); dims = 3)
-    head(feats)
+    feats  = cat(resnet50_a(x), resnet50_b(x); dims = 3)  # (7, 7, 4096, N)
+    pooled = NNlib.meanpool(feats, size(feats)[1:2])
+    head(reshape(pooled, size(pooled, 3), size(pooled, 4)))
 end
 
 ps, st = Lux.setup(Xoshiro(0), outer)
@@ -293,7 +300,9 @@ outer = @compact(
     tower = encoder,
     head  = Dense(2048 => num_outputs),
 ) do x
-    head(tower(x))
+    feats  = tower(x)
+    pooled = NNlib.meanpool(feats, size(feats)[1:2])
+    head(reshape(pooled, size(pooled, 3), size(pooled, 4)))
 end
 
 ps, st = Lux.setup(Xoshiro(0), outer)
@@ -317,6 +326,10 @@ points to learn. Each family registers its variants under one
 - [`CONVNEXT_VARIANTS`](@ref). 23 variants (19 Apache 2.0 Facebook
   AI checkpoints plus 4 Meta DINOv3 encoders).
 - [`CONVNEXTV2_VARIANTS`](@ref). 26 variants.
+- [`SERESNET_VARIANTS`](@ref). 1 variant.
+- [`VGG_VARIANTS`](@ref). 8 variants.
+- [`VIT_VARIANTS`](@ref). 4 variants.
+- [`COATNET_VARIANTS`](@ref). 5 variants.
 
 See the [API Reference](api/models.md) for the full signatures.
 
@@ -340,6 +353,23 @@ pre-0.3 layout, pass `conv_mlp = true` to `create_model` or
 ```julia
 model, load = create_pretrained(:convnextv2_tiny_fcmae; conv_mlp = true)
 ```
+
+## Training under Reactant
+
+Luximm runs its LayerNorm and GroupNorm layers (ConvNeXt, ConvNeXt V2,
+ViT, CoAtNet's transformer stages and final norm, BiT), and BiT's
+weight standardization, through its own normalization functions. On
+ordinary arrays LayerNorm and GroupNorm call LuxLib, and the
+weight-standardization statistics use `Statistics`. Loading
+[Reactant](https://github.com/EnzymeAD/Reactant.jl) activates an
+extension that gives them a faster traced method: the reverse pass of
+every normalization skips a full-size reduction whose value is
+identically zero (the derivative of the variance with respect to the
+mean), while first and higher derivatives stay exact, so gradient
+penalties and other nested AD remain correct. Nothing needs to be
+configured; `using Reactant` is enough. Parameter trees are the same
+as Lux's `LayerNorm` and `GroupNorm`, so weights and checkpoints carry
+over.
 
 ## Pretrained weights and the HuggingFace cache
 
