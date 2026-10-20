@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# Thin launcher: cd into the JimmCI project so --project resolves
-# regardless of $PWD, then hand off to Julia.
-set -euo pipefail
-HERE="$(cd -- "$(dirname -- "$0")" && pwd -P)"
-PROJ="$(cd -- "$HERE/.." && pwd -P)"
-exec "${JIMM_CI_JULIA:-/usr/local/bin/julia}" --project="$PROJ" \
-    -e 'using JimmCI; JimmCI.cli_main()' -- "$@"

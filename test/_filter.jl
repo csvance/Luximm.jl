@@ -2,9 +2,8 @@
 #
 # Two environment variables control what runs:
 #
-#   JIMM_TEST_FAMILIES  comma-separated family names. Recognized values are
-#                       "infra", "bit", "resnet", "convnextv2", and "convnext".
-#                       Empty / unset means
+#   JIMM_TEST_FAMILIES  comma-separated family names, the keys of
+#                       `FAMILY_FILES` below. Empty / unset means
 #                       all families run, unless JIMM_TEST_VARIANTS is set
 #                       (in which case the family set is inferred from the
 #                       requested variants and infra is dropped).
@@ -27,17 +26,22 @@
 #   JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
 #       julia --project -e 'using Pkg; Pkg.test()'
 
-const _JIMM_DEFAULT_FAMILIES = (
-    "infra",
-    "bit",
-    "resnet",
-    "convnextv2",
-    "convnext",
-    "vgg",
-    "seresnet",
-    "vit",
-    "coatnet",
+# Every test family and the files it runs, in run order. `runtests.jl` walks this
+# table; adding a family means adding its row here and a prefix in
+# `_jimm_variant_family` below.
+const FAMILY_FILES = (
+    "infra" => ("test_hf_download.jl", "test_hf_hub_download.jl", "test_init.jl"),
+    "bit" => ("test_bit_resnet.jl",),
+    "resnet" => ("test_resnet.jl",),
+    "convnext" => ("test_convnext.jl",),
+    "convnextv2" => ("test_convnextv2.jl",),
+    "vgg" => ("test_vgg.jl",),
+    "seresnet" => ("test_seresnet.jl",),
+    "vit" => ("test_vit.jl",),
+    "coatnet" => ("test_coatnet.jl",),
 )
+
+const _JIMM_DEFAULT_FAMILIES = first.(FAMILY_FILES)
 
 function _jimm_env_csv(name::AbstractString)
     raw = get(ENV, name, "")

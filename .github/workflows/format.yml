@@ -1,5 +1,5 @@
 # Runic formatting check: every .jl file in the repo must be Runic-formatted. Run
-# `runic -i src test docs ci utils` locally (see CLAUDE.md) and commit the result;
+# `runic -i src test docs utils` locally (see CLAUDE.md) and commit the result;
 # this check fails with a diff until the whole tree is formatted.
 name: Format
 

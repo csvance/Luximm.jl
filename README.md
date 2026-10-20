@@ -5,7 +5,6 @@
 
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://csvance.github.io/Luximm.jl/dev/)
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://csvance.github.io/Luximm.jl/stable/)
-[![CI](https://img.shields.io/github/checks-status/csvance/Luximm.jl/master?label=CI)](https://github.com/csvance/Luximm.jl/commits/master)
 [![code style: runic](https://img.shields.io/badge/code_style-%E1%9A%B1%E1%9A%A2%E1%9A%BE%E1%9B%81%E1%9A%B2-black)](https://github.com/fredrikekre/Runic.jl)
 
 </div>
@@ -36,9 +35,8 @@ This library ships agent skills. In Claude Code:
 
 That installs `timm-to-lux`, the porting workflow behind this library
 (converting PyTorch `timm` models into numerically-equivalent Lux.jl
-implementations with parity-tested weight loading), and
-`tachikoma-tui`, a bootstrap guide for Tachikoma.jl TUI apps. Both live
-in [`skills/`](skills) as plain Markdown.
+implementations with parity-tested weight loading). It lives in
+[`skills/`](skills) as plain Markdown.
 
 ## Available backbones
 

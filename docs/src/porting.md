@@ -289,17 +289,17 @@ and compare against the per-block fixture.
 ### Phase 7: Update the bookkeeping files
 
 After parity passes, two repo files need to stay in sync. Forgetting
-either is a silent regression in CI's path filtering or the
-user-facing variant table.
+either is a silent regression in the test suite or the user-facing
+variant table.
 
 1. `README.md` and the API reference. Update the backbone table at
    the top of `README.md`, and confirm the API reference page
    (`docs/src/api/models.md`) lists the new constructor and loader.
-2. `ci/JimmCI/src/PathFilter.jl`. Update `_FAMILY_PREFIXES`,
-   `_FAMILY_EXACT`, `ALL_FAMILIES`, `REPRESENTATIVE_VARIANT`, and
-   the `_SHARED_*` lists as appropriate. Without this, CI will
-   silently skip tests for the new code on PR-scope runs; only a
-   full `jimm-ci --master` sweep would catch it.
+2. `test/_filter.jl`. Add the family's row to `FAMILY_FILES` and its
+   variant prefix to `_jimm_variant_family`. A test file that is not
+   listed in `FAMILY_FILES` never runs. Also add the family's dump
+   sidecar to the `case "$variant"` block in
+   `scripts/test_variant.sh`.
 
 ## Pitfalls reference
 

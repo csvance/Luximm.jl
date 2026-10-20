@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runic pre-commit hook: format the source tree with Runic and re-stage the result.
 #
-# Runs `runic --inplace --diff` over `src test docs ci utils` (whichever of those
+# Runs `runic --inplace --diff` over `src test docs utils` (whichever of those
 # directories exist), which covers every tracked .jl file in the repo.
 #
 # Requires the `runic` CLI (Julia >= 1.12 Pkg app), found via $RUNIC, PATH, or
@@ -34,7 +34,7 @@ fi
 
 # Only pass directories that exist: `runic` errors out on a missing path, which
 # would block every commit if a source directory were ever renamed or removed.
-dirs=(src test docs ci utils)
+dirs=(src test docs utils)
 targets=()
 for d in "${dirs[@]}"; do
     [ -d "$d" ] && targets+=("$d")

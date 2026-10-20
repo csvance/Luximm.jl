@@ -21,7 +21,7 @@ input and weights. The bar is two-tier:
 
 This page covers the layout of the test suite, how to scope a run
 to a single variant, how to dump the HDF5 fixture a parity test
-consumes, and how production CI runs the sweep.
+consumes, and how the full sweep is run.
 
 ## Test layout
 
@@ -154,10 +154,11 @@ uv run python test/parity/dump_features_only_io.py --all
 
 Existing fixtures are skipped, so `--all` is safe to re-run and resumes
 after an interruption; delete the `.h5` to force a re-dump. Like the
-other sidecars it honors `JIMM_PARITY_DIR`, so on the CI box:
+other sidecars it honors `JIMM_PARITY_DIR`, so fixtures can live on a
+larger disk:
 
 ```
-JIMM_PARITY_DIR=/var/lib/jimm-ci/parity \
+JIMM_PARITY_DIR=/data/luximm/parity \
     uv run python test/parity/dump_features_only_io.py --all
 ```
 
@@ -165,11 +166,10 @@ There is no `--in-chans` companion: the pyramid parity test only
 exercises the 3-channel path, since the `adapt_input_conv` stem is
 already covered by the `forward_features` fixtures.
 
-`jimm-ci` dumps these automatically (`Builder.jl` invokes the sidecar
-per family alongside the per-family one), and `scripts/test_variant.sh`
-dumps a variant's pyramid fixture along with its `forward_features` one.
-Both paths are gated on the fixture existing, so a missing one shows up
-as `skipping <variant> feature pyramid: fixture missing at ...` rather
+`scripts/test_variant.sh` dumps a variant's pyramid fixture along with
+its `forward_features` one. The test is gated on the fixture existing,
+so a missing one shows up as
+`skipping <variant> feature pyramid: fixture missing at ...` rather
 than a failure.
 
 ### Dumping a fixture
@@ -219,32 +219,13 @@ on `PATH`.
 
 ## CI
 
-Production CI runs on a self-hosted Linux VM via a Julia TUI driver
-named `jimm-ci` (under `ci/JimmCI/`). The setup is unusual on
-purpose: the parity test suite needs hundreds of gigabytes of
-`timm` reference weights and per-variant HDF5 fixtures that each
-take a few minutes of CPU plus a PyTorch environment to produce.
-Hosted CI runners would re-download and re-generate that material
-on every run; a self-hosted machine with a persistent state
-directory hits the cache instead.
+The parity suite does not run on hosted CI: a full sweep needs every
+variant's `timm` weights and a PyTorch environment to dump the
+fixtures, which is more disk and CPU than a hosted runner offers. The
+maintainer runs the full sweep by hand on a machine with a large disk,
+on CPU in FP32, before each release.
 
-See [`ci/README.md`](https://github.com/csvance/Luximm.jl/blob/master/ci/README.md)
-for the full deployment story (App registration, secrets layout,
-the TUI keybindings, and how PR runs map paths to test families).
-The short version, from a contributor's perspective:
-
-- PRs are reviewed by a maintainer and approved by selecting their
-  row in the `jimm-ci` TUI on the VM. Fork PRs are filtered out
-  client-side and never produce a Check Run.
-- The runner consults `ci/JimmCI/src/PathFilter.jl` to map changed
-  paths to families. If you add a new family or rename a shared
-  module, that file must be updated; otherwise CI silently skips
-  tests for the new code.
-- Per-PR Check Runs come back through the standard GitHub Checks
-  API. Look at the `jimm-ci / <family>` checks on the PR.
-
-The separate documentation workflow under
-`.github/workflows/docs.yml` is a hosted GitHub Actions
-job. It builds and deploys this documentation site without needing
-parity weights or fixtures, so the regular runners are sufficient
-for that path.
+The hosted GitHub Actions workflows cover what needs neither weights
+nor fixtures: `.github/workflows/format.yml` checks Runic formatting,
+and `.github/workflows/docs.yml` builds and deploys this
+documentation site.
