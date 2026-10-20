@@ -15,7 +15,7 @@ Runic style — let the tool do it. Likewise, do not use JuliaFormatter-based to
 
 CI enforces this: `.github/workflows/format.yml` runs Runic 1.11 over every `.jl` file
 and fails on any diff. Keep its `version` in sync with the local `runic --version`.
-`scripts/pre-commit-runic` formats `src test docs ci utils` and re-stages the result on
+`scripts/pre-commit-runic` formats `src test docs utils` and re-stages the result on
 every commit; install it in a fresh clone with
 `cp scripts/pre-commit-runic .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`.
 
@@ -23,6 +23,6 @@ every commit; install it in a fresh clone with
 
 1. **`README.md`** — the README enumerates supported backbones, families, and variant counts. After adding, removing, or renaming a model family, variant, or top-level public API, re-read README.md and update any list, table, or example that drifted. A change is "non-trivial" if a reader looking at README.md would now see something that is no longer true.
 
-2. **`ci/JimmCI/src/PathFilter.jl`** — this file maps changed source paths to the set of test families that CI runs. After adding a new model family, a new shared module under `src/`, a new top-level config file, or a new `test/test_*.jl` parity test, update `_FAMILY_PREFIXES`, `_FAMILY_EXACT`, `ALL_FAMILIES`, `REPRESENTATIVE_VARIANT`, and `_SHARED_PREFIXES` / `_SHARED_EXACT` as appropriate. If the filter is not updated, CI will silently skip tests for the new code on PR-scope runs; only a full `jimm-ci --master` sweep would catch it.
+2. **`test/_filter.jl`** — `FAMILY_FILES` lists every test family and its files, and `_jimm_variant_family` maps a variant prefix to its family. After adding a new model family or a new `test/test_*.jl` file, add its row to `FAMILY_FILES` and its prefix to `_jimm_variant_family`; a test file missing from `FAMILY_FILES` never runs. Also add the family's dump sidecar to the `case "$variant"` block in `scripts/test_variant.sh`.
 
 When in doubt, run through this checklist explicitly before reporting a task complete.

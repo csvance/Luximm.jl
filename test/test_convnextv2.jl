@@ -6,8 +6,8 @@
 #      timm's forward_features (and logits, for variants with a trained head).
 #   2. Downloads the variant's model.safetensors from HuggingFace (cached on
 #      disk so reruns are fast and offline).
-#   3. Builds the Luximm model, applies the weights, and asserts max-abs-diff
-#      against the timm reference is under `LOGITS_ATOL`.
+#   3. Builds the Luximm model, applies the weights, and asserts the relative L2 error
+#      against the timm reference is under `PARITY_RTOL`.
 #
 # Skipped if the fixture file is missing or HF_OFFLINE=1 is set (so CI without
 # network or fixtures can still pass the rest of the suite).

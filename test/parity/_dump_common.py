@@ -22,6 +22,12 @@ import numpy as np
 import torch
 
 
+# Batch size of every fixture input. Two distinct samples, so a Julia forward that
+# mixes the batch axis into tokens, heads or a reduction fails parity instead of
+# matching exactly as it would at batch 1.
+PARITY_BATCH = 2
+
+
 def to_numpy(x: torch.Tensor) -> np.ndarray:
     return x.detach().cpu().contiguous().float().numpy()
 

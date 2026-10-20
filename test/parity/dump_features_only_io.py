@@ -3,7 +3,7 @@
 One fixture per variant, covering every family Luximm builds a feature pyramid
 for (ResNet, SE-ResNet, BiT ResNetV2, ConvNeXt, ConvNeXt V2, ViT):
 
-    /input                       deterministic torch.randn (seeded), NCHW
+    /input                       deterministic torch.randn (seeded), NCHW, batch 2
     /output/feat_01 ... feat_0K   timm features_only forward, one per tap
     /feature_channels            timm's feature_info.channels()
     /feature_reductions          timm's feature_info.reduction()
@@ -41,7 +41,7 @@ import timm
 import torch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _dump_common import dump, to_numpy
+from _dump_common import PARITY_BATCH, dump, to_numpy
 
 
 # Short key (the Luximm variant symbol) -> (full timm name, Luximm test
@@ -185,7 +185,7 @@ def run_one(
     cfg_model = model.model if family == VIT_FAMILY else model
     _cfg_c, height, width = cfg_model.default_cfg["input_size"]
     gen = torch.Generator().manual_seed(seed)
-    x = torch.randn(1, 3, height, width, generator=gen)
+    x = torch.randn(PARITY_BATCH, 3, height, width, generator=gen)
 
     with torch.no_grad():
         feats = model(x)

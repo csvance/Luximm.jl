@@ -6,22 +6,20 @@ CurrentModule = Luximm
 
 Luximm's correctness story rests on parity tests: for every registered
 variant, the Julia forward must match `timm`'s forward on the same
-input and weights. The bar is two-tier:
+input and weights. Every comparison (features, logits, the
+`in_chans=1` companion and each `features_only` tap) uses one metric,
+the relative L2 error `‖y - ref‖ / ‖ref‖`, against one bar,
+`PARITY_RTOL = 1f-3` in `test/_parity_tol.jl`. The suite runs on CPU
+in FP32. Correct ports land at `1e-7` to `1e-5`, and porting bugs at
+`1e-2` and above; [Porting](porting.md) explains the choice.
 
-- **Logits** are checked at an absolute max-abs-diff under
-  `TOL = 1f-3`. The classifier head is shallow and tightly bounded,
-  so an absolute ceiling is the meaningful end-to-end guarantee.
-- **Features** (`forward_features` and the `in_chans=1` companion)
-  are checked at a relative bar, `max-abs-diff / max-abs(timm ref)`
-  under `FEATURES_RTOL = 1f-3`. Deep backbones accumulate FP32
-  rounding through dozens of stages, which inflates raw pre-norm
-  feature diffs by a factor that scales with depth and channel
-  width, even when downstream logits stay tight. A relative bar
-  keeps the check scale-free across tiny through huge variants.
+Set `JIMM_PARITY_REPORT` to a file path to also append one CSV row
+per check (`variant,check,rel_l2,cosine,max_abs,pass`), which makes a
+full sweep easy to review.
 
 This page covers the layout of the test suite, how to scope a run
 to a single variant, how to dump the HDF5 fixture a parity test
-consumes, and how production CI runs the sweep.
+consumes, and how the full sweep is run.
 
 ## Test layout
 
@@ -96,7 +94,10 @@ A parity fixture is an HDF5 file produced by one of the Python
 sidecars under `test/parity/`. It contains:
 
 - `/input`: deterministic `torch.randn` input in PyTorch NCHW
-  layout.
+  layout, with a batch of two distinct samples (`PARITY_BATCH` in
+  `test/parity/_dump_common.py`). At batch 1, a forward that mixes
+  the batch axis into tokens, heads or a reduction would still match
+  exactly; at batch 2 it fails.
 - `/state_dict/<key>`: every PyTorch parameter, keyed by its
   `state_dict` name.
 - `/output/features`: the result of `model.forward_features(input)`.
@@ -154,10 +155,11 @@ uv run python test/parity/dump_features_only_io.py --all
 
 Existing fixtures are skipped, so `--all` is safe to re-run and resumes
 after an interruption; delete the `.h5` to force a re-dump. Like the
-other sidecars it honors `JIMM_PARITY_DIR`, so on the CI box:
+other sidecars it honors `JIMM_PARITY_DIR`, so fixtures can live on a
+larger disk:
 
 ```
-JIMM_PARITY_DIR=/var/lib/jimm-ci/parity \
+JIMM_PARITY_DIR=/data/luximm/parity \
     uv run python test/parity/dump_features_only_io.py --all
 ```
 
@@ -165,11 +167,10 @@ There is no `--in-chans` companion: the pyramid parity test only
 exercises the 3-channel path, since the `adapt_input_conv` stem is
 already covered by the `forward_features` fixtures.
 
-`jimm-ci` dumps these automatically (`Builder.jl` invokes the sidecar
-per family alongside the per-family one), and `scripts/test_variant.sh`
-dumps a variant's pyramid fixture along with its `forward_features` one.
-Both paths are gated on the fixture existing, so a missing one shows up
-as `skipping <variant> feature pyramid: fixture missing at ...` rather
+`scripts/test_variant.sh` dumps a variant's pyramid fixture along with
+its `forward_features` one. The test is gated on the fixture existing,
+so a missing one shows up as
+`skipping <variant> feature pyramid: fixture missing at ...` rather
 than a failure.
 
 ### Dumping a fixture
@@ -209,6 +210,9 @@ scripts/test_variant.sh convnextv2_atto_fcmae --in-chans 1
 
 # Force a fresh fixture dump even if one already exists:
 scripts/test_variant.sh convnextv2_atto_fcmae --force
+
+# Dump the fixtures without running the tests:
+scripts/test_variant.sh convnextv2_atto_fcmae --dump-only
 ```
 
 The script resolves the family from the variant prefix, calls the
@@ -219,32 +223,29 @@ on `PATH`.
 
 ## CI
 
-Production CI runs on a self-hosted Linux VM via a Julia TUI driver
-named `jimm-ci` (under `ci/JimmCI/`). The setup is unusual on
-purpose: the parity test suite needs hundreds of gigabytes of
-`timm` reference weights and per-variant HDF5 fixtures that each
-take a few minutes of CPU plus a PyTorch environment to produce.
-Hosted CI runners would re-download and re-generate that material
-on every run; a self-hosted machine with a persistent state
-directory hits the cache instead.
+The parity suite does not run on hosted CI: a full sweep needs every
+variant's `timm` weights and a PyTorch environment to dump the
+fixtures, which is more disk and CPU than a hosted runner offers. The
+maintainer runs the full sweep by hand on a machine with a large disk,
+on CPU in FP32, before each release.
 
-See [`ci/README.md`](https://github.com/csvance/Luximm.jl/blob/master/ci/README.md)
-for the full deployment story (App registration, secrets layout,
-the TUI keybindings, and how PR runs map paths to test families).
-The short version, from a contributor's perspective:
+`scripts/parity_sweep.sh` runs it: `uv sync`, dump every missing
+fixture (both `in_chans` and the `features_only` pyramids), run
+`Pkg.test()`, and write the log and the CSV report to a per-run
+directory, ending with a summary of failed checks, skipped checks and
+failed dumps. Machine-specific settings go in a git-ignored launcher:
 
-- PRs are reviewed by a maintainer and approved by selecting their
-  row in the `jimm-ci` TUI on the VM. Fork PRs are filtered out
-  client-side and never produce a Check Run.
-- The runner consults `ci/JimmCI/src/PathFilter.jl` to map changed
-  paths to families. If you add a new family or rename a shared
-  module, that file must be updated; otherwise CI silently skips
-  tests for the new code.
-- Per-PR Check Runs come back through the standard GitHub Checks
-  API. Look at the `jimm-ci / <family>` checks on the PR.
+```
+cp scripts/parity_env.example.sh scripts/parity_env.sh
+# edit LUXIMM_DATA (a directory on the large disk), optionally HF_TOKEN
+scripts/parity_env.sh                                  # full sweep
+JIMM_TEST_FAMILIES=convnextv2 scripts/parity_env.sh    # one backbone family
+```
 
-The separate documentation workflow under
-`.github/workflows/docs.yml` is a hosted GitHub Actions
-job. It builds and deploys this documentation site without needing
-parity weights or fixtures, so the regular runners are sufficient
-for that path.
+`JIMM_TEST_FAMILIES` and `JIMM_TEST_VARIANTS` scope the dumps as well
+as the tests, so a scoped sweep only downloads the weights it uses.
+
+The hosted GitHub Actions workflows cover what needs neither weights
+nor fixtures: `.github/workflows/format.yml` checks Runic formatting,
+and `.github/workflows/docs.yml` builds and deploys this
+documentation site.

@@ -21,14 +21,12 @@ A new backbone is mergeable when all four hold:
 1. **Pretrained parity.** Forward output of the Lux model with weights
    loaded via the closure returned by
    [`create_pretrained`](@ref) matches `timm`'s forward
-   output on the same input. The bar is two-tier: **logits** are
-   checked at an absolute max-abs-diff under `LOGITS_ATOL = 1f-3`, and
-   **features** (`num_classes = 0`, and the `in_chans = 1` companion)
-   are checked at a relative bar `max-abs-diff / max-abs(timm ref)`
-   under `FEATURES_RTOL = 1f-4`. Existing models land well inside
-   this: BiT ResNetV2-50 features around `1.5e-4` absolute (well
-   under the relative bar at typical feature magnitudes), its logits
-   around `2e-5`; ConvNeXtV2 atto comparable.
+   output on the same input: features (`num_classes = 0`, and the
+   `in_chans = 1` companion), logits and every `features_only` tap
+   are each within a relative L2 error `‖y - ref‖ / ‖ref‖` of
+   `PARITY_RTOL = 1f-3`. Existing models land far inside this, at
+   `1e-6` to `1e-5`; ConvNeXt V2 Tiny, for example, sits near `2e-6`
+   on features and logits.
 2. **Random-init parity.** With the Lux model initialized using the
    same `_init_weights` recipe `timm` uses for the family, and `timm`
    initialized with the same RNG seed, forward outputs match the
@@ -46,32 +44,31 @@ A new backbone is mergeable when all four hold:
    HuggingFace repo id and default class count, and listed in the
    README backbone table.
 
-## Why the bars are `~1e-3` (logits) and `~1e-4` (features), not `1e-5`
+## Why the bar is `1e-3` relative L2
 
-Float32 round-off accumulates through the depth of a network. Each
-conv, norm, and weight-standardization stage reorders sums in ways
-that differ from PyTorch's BLAS or cuDNN kernels even when the math
-is semantically identical, so a 50-layer ResNet against the `timm`
-reference reliably lands near `1e-4` absolute diff on order-one
-activations. The shallower head (one pool plus one Dense) sits
-closer to `1e-5` because almost no new accumulation happens after
-the backbone.
+The suite runs on CPU in FP32, and its question is whether a model is
+close enough to `timm` that its pretrained weights transfer, not
+whether it reproduces `timm` to the last bit. Float32 round-off
+accumulates through the depth of a network, and summation order, BLAS
+thread counts and CPU kernels all move it, so a correct port lands
+between `1e-7` and `1e-5` relative L2 and varies a little from run to
+run. Real porting bugs (cross-correlation vs convolution, a wrong
+weight mapping, an axis permutation, a missing layer, the wrong
+activation) land at `1e-2` and above. The bar sits between the two,
+with room for the spread between machines.
 
-The test gates are `LOGITS_ATOL = 1f-3` (absolute, logits) and
-`FEATURES_RTOL = 1f-4` (relative, features). Both are tight enough
-to catch the silent-divergence failure modes that actually matter
-(cross-correlation vs convolution, population vs sample variance,
-GELU approximation mismatch, axis permutations, missing norm
-`epsilon`), and loose enough not to fail on legitimate float32
-reordering. The features bar is relative because raw pre-norm
-features on deep / wide backbones (large and xlarge ConvNeXt, huge
-ConvNeXtV2) drift by `~1e-3` to `~2e-3` absolute even when their
-downstream logits stay near `1e-5` after the LayerNorm + classifier
-squashes them; a relative bar keeps the check scale-free across
-tiny through huge variants. If your port reports a logits
-max-abs-diff in the `1e-2` range, or a features relative diff in
-the `1e-2` range or higher, that is a real bug, not round-off;
-bisect it with the per-stage parity fixtures described below.
+Relative L2 is used everywhere, not max-abs-diff: pre-norm features
+on deep or wide backbones reach magnitudes in the thousands, and
+transformers carry a few outlier activations, so an absolute bar or
+one normalized by the largest element misjudges them.
+
+The bar is loose enough to pass a few subtle mismatches, such as a
+norm `epsilon` of `1e-5` against `1e-6` or a population against a
+sample variance on large maps. Those do not change what a downstream
+head learns, but they are still wrong, so read the logged number, not
+just the pass: if a port that ought to be exact reports `1e-4` or
+more, find out why before calling it done. Bisect with the per-stage
+parity fixtures described below.
 
 ## Reference example
 
@@ -100,7 +97,7 @@ convention. Look at `test/parity/dump_resnetv2_bit_io.py` for the
 template.
 
 The fixture stores `/input` (deterministic random input, PyTorch NCHW
-layout), `/state_dict/<key>` for every PyTorch parameter, and
+layout, batch of two), `/state_dict/<key>` for every PyTorch parameter, and
 `/output/features` plus optional `/output/logits`. The Julia side
 reads it via `Luximm.Interop.read_parity`, which reverses the axes so
 tensors arrive in Lux's WHCN layout.
@@ -289,17 +286,17 @@ and compare against the per-block fixture.
 ### Phase 7: Update the bookkeeping files
 
 After parity passes, two repo files need to stay in sync. Forgetting
-either is a silent regression in CI's path filtering or the
-user-facing variant table.
+either is a silent regression in the test suite or the user-facing
+variant table.
 
 1. `README.md` and the API reference. Update the backbone table at
    the top of `README.md`, and confirm the API reference page
    (`docs/src/api/models.md`) lists the new constructor and loader.
-2. `ci/JimmCI/src/PathFilter.jl`. Update `_FAMILY_PREFIXES`,
-   `_FAMILY_EXACT`, `ALL_FAMILIES`, `REPRESENTATIVE_VARIANT`, and
-   the `_SHARED_*` lists as appropriate. Without this, CI will
-   silently skip tests for the new code on PR-scope runs; only a
-   full `jimm-ci --master` sweep would catch it.
+2. `test/_filter.jl`. Add the family's row to `FAMILY_FILES` and its
+   variant prefix to `_jimm_variant_family`. A test file that is not
+   listed in `FAMILY_FILES` never runs. Also add the family's dump
+   sidecar to the `case "$variant"` block in
+   `scripts/test_variant.sh`.
 
 ## Pitfalls reference
 
