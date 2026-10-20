@@ -117,7 +117,7 @@ But do not add the bigger variants to the table until the first passes parity. A
 **User-facing knobs every constructor exposes:**
 
 - `in_chans::Int = 3`.
-- `num_classes::Int = 0`. Zero means the classifier head is omitted and the forward returns features. (`create_model` and `create_pretrained` default to the variant's `default_num_classes` instead.)
+- `num_classes::Int = 0`. Zero means the classifier head is omitted and the forward returns features. (`create_model` keeps that default; `create_pretrained` defaults to the variant's `default_num_classes`.)
 - `features_only` / `out_indices` for families with a feature pyramid.
 - Anything else the architecture genuinely exposes (e.g. ConvNeXt's `conv_mlp`). Do not invent knobs for parity completeness; only mirror what `timm.create_model` accepts.
 - The constructor never takes `pretrained`. Weight loading is a separate private `_load_<family>(ps, st, variant; ...) -> (ps, st)`, reached through the `create_pretrained(variant) -> (model, load)` closure. Keep the constructor pure so tests can build random-init models without touching the network and so the model composes cleanly inside a larger `@compact` block.

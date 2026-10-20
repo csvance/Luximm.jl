@@ -76,7 +76,8 @@ end
     x = randn(Xoshiro(1), Float32, s, s, 3, 2)
 
     @testset "classifier head" begin
-        model = create_model(v)
+        # `create_model` builds a features-only model unless asked for a head.
+        model = create_model(v; num_classes = default_num_classes(v))
         ps, st = Lux.setup(Xoshiro(0), model)
         st = Lux.testmode(st)
         y = first(model(x, ps, st))
