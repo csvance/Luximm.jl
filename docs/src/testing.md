@@ -210,6 +210,9 @@ scripts/test_variant.sh convnextv2_atto_fcmae --in-chans 1
 
 # Force a fresh fixture dump even if one already exists:
 scripts/test_variant.sh convnextv2_atto_fcmae --force
+
+# Dump the fixtures without running the tests:
+scripts/test_variant.sh convnextv2_atto_fcmae --dump-only
 ```
 
 The script resolves the family from the variant prefix, calls the
@@ -225,6 +228,22 @@ variant's `timm` weights and a PyTorch environment to dump the
 fixtures, which is more disk and CPU than a hosted runner offers. The
 maintainer runs the full sweep by hand on a machine with a large disk,
 on CPU in FP32, before each release.
+
+`scripts/parity_sweep.sh` runs it: `uv sync`, dump every missing
+fixture (both `in_chans` and the `features_only` pyramids), run
+`Pkg.test()`, and write the log and the CSV report to a per-run
+directory, ending with a summary of failed checks, skipped checks and
+failed dumps. Machine-specific settings go in a git-ignored launcher:
+
+```
+cp scripts/parity_env.example.sh scripts/parity_env.sh
+# edit LUXIMM_DATA (a directory on the large disk), optionally HF_TOKEN
+scripts/parity_env.sh                                  # full sweep
+JIMM_TEST_FAMILIES=convnextv2 scripts/parity_env.sh    # one backbone family
+```
+
+`JIMM_TEST_FAMILIES` and `JIMM_TEST_VARIANTS` scope the dumps as well
+as the tests, so a scoped sweep only downloads the weights it uses.
 
 The hosted GitHub Actions workflows cover what needs neither weights
 nor fixtures: `.github/workflows/format.yml` checks Runic formatting,

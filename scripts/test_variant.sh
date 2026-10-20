@@ -2,12 +2,12 @@
 #
 # Targeted parity test for a single backbone variant.
 #
-# Resolves the variant's family, ensures its HDF5 fixture exists under
-# `data/parity/` (dumping it via the Python sidecar if not), and runs only
-# that variant's testset via JIMM_TEST_VARIANTS.
+# Resolves the variant's family, ensures its HDF5 fixtures exist under
+# `$JIMM_PARITY_DIR` (default `data/parity/`), dumping them via the Python
+# sidecars if not, and runs only that variant's testset via JIMM_TEST_VARIANTS.
 #
 # Usage:
-#   scripts/test_variant.sh <variant_key> [--in-chans N] [--force]
+#   scripts/test_variant.sh <variant_key> [--in-chans N] [--force] [--dump-only]
 #
 # Examples:
 #   scripts/test_variant.sh convnextv2_atto_fcmae
@@ -15,13 +15,15 @@
 #   scripts/test_variant.sh resnet18_a1_in1k
 #   scripts/test_variant.sh resnetv2_50x1_bit_goog_in21k
 #
-# `--force` re-dumps the fixture even if it already exists.
+# `--force` re-dumps the fixture even if it already exists. `--dump-only` stops
+# after the dump, without running the Julia tests (scripts/parity_sweep.sh uses
+# it to dump a list of variants before one test run).
 
 set -euo pipefail
 
 usage() {
     cat <<EOF
-Usage: $0 <variant_key> [--in-chans N] [--force]
+Usage: $0 <variant_key> [--in-chans N] [--force] [--dump-only]
 
 Runs the Julia parity test for a single backbone variant, dumping the timm
 reference fixture first if it is missing. Variant keys match Luximm's
@@ -33,6 +35,7 @@ EOF
 variant=""
 in_chans=3
 force=0
+dump_only=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -40,6 +43,7 @@ while [[ $# -gt 0 ]]; do
         --in-chans) in_chans="$2"; shift 2 ;;
         --in-chans=*) in_chans="${1#*=}"; shift ;;
         --force) force=1; shift ;;
+        --dump-only) dump_only=1; shift ;;
         --) shift; break ;;
         -*) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
         *)
@@ -124,7 +128,9 @@ suffix=""
 if [[ "$in_chans" -ne 3 ]]; then
     suffix="_in${in_chans}c"
 fi
-fixture="data/parity/${variant}${suffix}_io.h5"
+# Same directory the sidecars write to and the Julia tests read from.
+parity_dir="${JIMM_PARITY_DIR:-data/parity}"
+fixture="$parity_dir/${variant}${suffix}_io.h5"
 
 if [[ -f "$fixture" && "$force" -ne 1 ]]; then
     echo "[test_variant] fixture $fixture exists; reusing (pass --force to re-dump)"
@@ -147,7 +153,7 @@ fi
 # The features_only fixture has no in_chans variants: the pyramid parity test
 # only exercises the 3-channel path.
 if [[ "$has_pyramid" -eq 1 && "$in_chans" -eq 3 ]]; then
-    fo_fixture="data/parity/${variant}_featsonly_io.h5"
+    fo_fixture="$parity_dir/${variant}_featsonly_io.h5"
     if [[ -f "$fo_fixture" && "$force" -ne 1 ]]; then
         echo "[test_variant] fixture $fo_fixture exists; reusing"
     else
@@ -158,6 +164,8 @@ if [[ "$has_pyramid" -eq 1 && "$in_chans" -eq 3 ]]; then
         uv run python "$featsonly_sidecar" --variant "$variant"
     fi
 fi
+
+[[ "$dump_only" -eq 1 ]] && exit 0
 
 echo "[test_variant] running Julia test for $variant"
 JIMM_TEST_VARIANTS="$variant" julia --project=. -e 'using Pkg; Pkg.test()'
