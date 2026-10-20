@@ -135,7 +135,9 @@ else
 fi
 
 echo "[sweep] running Julia tests"
-julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test()'
+# --check-bounds=auto: Pkg.test's default --check-bounds=yes keeps a second package-image
+# cache, so every dependency would precompile again for the test process.
+julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test(; julia_args = ["--check-bounds=auto"])'
 test_rc=$?
 
 echo

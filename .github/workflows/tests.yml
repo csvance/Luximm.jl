@@ -53,4 +53,11 @@ jobs:
           version: '1.12'
       - uses: julia-actions/cache@v3
       - uses: julia-actions/julia-buildpkg@v1
+      # Pkg.test defaults to --check-bounds=yes, and package images are cached per
+      # check-bounds setting, so the test process would precompile every dependency a second
+      # time instead of reusing julia-buildpkg's. Coverage is off for the same reason (and
+      # nothing uploads it).
       - uses: julia-actions/julia-runtest@v1
+        with:
+          check_bounds: 'auto'
+          coverage: false
