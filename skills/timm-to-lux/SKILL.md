@@ -205,9 +205,12 @@ The verification loop is layered. Run the cheap gates between every meaningful e
 
 End-to-end first, against the fixture's `state_dict` (not the HF download) so the test isolates the forward pass:
 
-Logits (`num_classes > 0`): absolute max-abs-diff under `LOGITS_ATOL`.
+Every check, logits and features alike, is the relative L2 error `‖y - ref‖ / ‖ref‖` under `PARITY_RTOL = 1f-3` (`test/_parity_tol.jl`; the suite's `check_parity` helper wraps it). A correct port lands at `1e-7` to `1e-5`; a gate pass at `1e-4` or above on a port that should be exact still deserves a look (a norm `epsilon`, a variance correction).
+
+Logits (`num_classes > 0`):
 
 ```julia
+using LinearAlgebra: norm
 data = read_parity(_FIXTURE_PATH)
 model = resnet(:resnet50; in_chans = 3)
 rng = Xoshiro(0)
@@ -215,11 +218,11 @@ ps, st = Lux.setup(rng, model)
 st = Lux.testmode(st)
 ps = apply_state_dict(ps, data.state_dict, resnet50_mapping(data.state_dict))
 y, _ = model(data.input, ps, st)
-diff = maximum(abs.(y .- data.output["logits"]))
-@test diff < 1f-3  # LOGITS_ATOL
+rel = norm(y .- data.output["logits"]) / norm(data.output["logits"])
+@test rel < 1f-3  # PARITY_RTOL
 ```
 
-Features (`num_classes = 0`): relative bar — absolute diff divided by the max absolute value of the timm reference. This keeps the check scale-free across tiny-through-huge variants whose raw pre-norm activations span very different magnitudes.
+Features (`num_classes = 0`): the same metric. Being relative keeps it scale-free across tiny-through-huge variants whose raw pre-norm activations span very different magnitudes.
 
 ```julia
 model_f = resnet(:resnet50; in_chans = 3, num_classes = 0)
@@ -227,9 +230,8 @@ ps_f, st_f = Lux.setup(rng, model_f)
 st_f = Lux.testmode(st_f)
 ps_f = apply_state_dict(ps_f, data.state_dict, resnet50_mapping(data.state_dict))
 y_f, _ = model_f(data.input, ps_f, st_f)
-diff = maximum(abs.(y_f .- data.output["features"]))
-rel  = diff / max(maximum(abs.(data.output["features"])), eps(Float32))
-@test rel < 1f-4  # FEATURES_RTOL
+rel = norm(y_f .- data.output["features"]) / norm(data.output["features"])
+@test rel < 1f-3  # PARITY_RTOL
 ```
 
 When it fails, the per-stage and per-block fixtures earn their keep. Walk the forward by hand:

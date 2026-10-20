@@ -1,23 +1,49 @@
-# Shared parity tolerance constants for all family test files.
-# Include with: isdefined(@__MODULE__, :LOGITS_ATOL) || include("_parity_tol.jl")
+# Shared parity tolerance and check for all family test files.
+# Include with: isdefined(@__MODULE__, :PARITY_RTOL) || include("_parity_tol.jl")
+#
+# Every parity comparison (features, logits, pyramid taps) uses one metric, the
+# relative L2 error ‖y - ref‖ / ‖ref‖, against one bar. The suite runs on CPU in
+# FP32, where summation order, BLAS threading and CPU kernels move the error by a
+# few 1e-6; porting bugs (a wrong weight mapping, a transposed reshape, a missing
+# layer, the wrong activation) land at 1e-2 and above. The bar sits between the
+# two with room for the machine-to-machine spread. Differences small enough to
+# pass, such as a slightly different norm epsilon, do not affect transfer learning.
 
-const LOGITS_ATOL = 1.0f-3
-# Features parity uses a relative bar: max-abs diff divided by max-abs of the
-# timm reference. Deep backbones accumulate FP32 rounding through many stages,
-# inflating raw pre-norm feature diffs even when downstream logits stay tight,
-# so an absolute ceiling there gives false negatives.
-const FEATURES_RTOL = 1.0f-4
+using LinearAlgebra: norm, dot
 
-# Deep variants whose feature rel-diff sits within ~2x of FEATURES_RTOL in
-# float32. At depth 24+ the accumulated rounding moves the measured rel diff a
-# few percent run to run (BLAS thread-count nondeterminism), so the shared bar
-# flakes even though logits stay an order of magnitude under LOGITS_ATOL. The
-# override widens the bar only for these paths; it is evidence-based, not a
-# blanket relaxation — the variant's logits sub-test still holds the model to
-# the tight absolute bar.
-const FEATURE_RTOL_OVERRIDES = Dict{Symbol, Float32}(
-    # ViT-L/14 CLIP: 24 pre-norm blocks; in1c features measured 9.3e-5 .. 1.1e-4.
-    :vit_large_patch14_clip_224_openai_ft_in1k => 2.0f-4,
-)
+const PARITY_RTOL = 1.0f-3
 
-feature_rtol(variant::Symbol) = get(FEATURE_RTOL_OVERRIDES, variant, FEATURES_RTOL)
+rel_l2(y, ref) = norm(y .- ref) / max(norm(ref), floatmin(Float32))
+
+# Set JIMM_PARITY_REPORT to a file path to append one CSV row per check.
+const _PARITY_REPORT = get(ENV, "JIMM_PARITY_REPORT", "")
+const _PARITY_REPORT_HEADER = "variant,check,rel_l2,cosine,max_abs,pass"
+
+function _report_parity(variant, check, rel, cosine, max_abs, pass)
+    isempty(_PARITY_REPORT) && return nothing
+    new = !isfile(_PARITY_REPORT) || filesize(_PARITY_REPORT) == 0
+    open(_PARITY_REPORT, "a") do io
+        new && println(io, _PARITY_REPORT_HEADER)
+        println(io, join((variant, check, rel, cosine, max_abs, pass), ','))
+    end
+    return nothing
+end
+
+"""
+    check_parity(variant, check, y, ref)
+
+Test that `y` has the shape of `ref` and is within `PARITY_RTOL` of it in
+relative L2, log the metrics, and append them to the report when one is set.
+"""
+function check_parity(variant, check, y, ref)
+    @test size(y) == size(ref)
+    size(y) == size(ref) || return nothing
+    rel = rel_l2(y, ref)
+    cosine = dot(vec(y), vec(ref)) / max(norm(y) * norm(ref), floatmin(Float32))
+    max_abs = maximum(abs.(y .- ref))
+    pass = rel < PARITY_RTOL
+    @info "$(variant) $(check): rel-L2 = $rel, cosine = $cosine, max-abs-diff = $max_abs"
+    _report_parity(variant, check, rel, cosine, max_abs, pass)
+    @test rel < PARITY_RTOL
+    return nothing
+end

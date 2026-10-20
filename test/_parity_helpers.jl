@@ -9,7 +9,7 @@
 # Include with:
 #   isdefined(@__MODULE__, :run_variant_parity) || include("_parity_helpers.jl")
 
-isdefined(@__MODULE__, :LOGITS_ATOL) || include("_parity_tol.jl")
+isdefined(@__MODULE__, :PARITY_RTOL) || include("_parity_tol.jl")
 
 using HDF5: HDF5
 
@@ -82,14 +82,7 @@ function run_variant_feature_pyramid_parity(variant::Symbol)
         @test feats isa Tuple
         @test length(feats) == length(fixture.expected)
         for i in eachindex(fixture.expected)
-            expected = fixture.expected[i]
-            @test size(feats[i]) == size(expected)
-            diff = maximum(abs.(feats[i] .- expected))
-            ref_scale = max(maximum(abs.(expected)), eps(Float32))
-            rel = diff / ref_scale
-            @info "$(variant) tap $i ($(info.names[i]), reduction " *
-                "$(info.reductions[i])) max-abs-diff = $diff, rel = $rel"
-            @test rel < FEATURES_RTOL
+            check_parity(variant, "tap$(i)_$(info.names[i])", feats[i], fixture.expected[i])
         end
 
         # Dropping the finest tap must not disturb the tree or the tensors.
@@ -175,12 +168,7 @@ function run_variant_parity(variant::Symbol, fixture)
         st = Lux.testmode(st)
         ps, st = load(ps, st)
         y, _ = model(x, ps, st)
-        @test size(y) == size(expected_features)
-        diff = maximum(abs.(y .- expected_features))
-        ref_scale = max(maximum(abs.(expected_features)), eps(Float32))
-        rel = diff / ref_scale
-        @info "$(variant) features max-abs-diff = $diff, rel = $rel"
-        @test rel < feature_rtol(variant)
+        check_parity(variant, "features", y, expected_features)
     end
 
     if haskey(fixture.output, "logits")
@@ -191,10 +179,7 @@ function run_variant_parity(variant::Symbol, fixture)
             st = Lux.testmode(st)
             ps, st = load(ps, st)
             y, _ = model(x, ps, st)
-            @test size(y) == size(expected_logits)
-            diff = maximum(abs.(y .- expected_logits))
-            @info "$(variant) logits max-abs-diff = $diff"
-            @test diff < LOGITS_ATOL
+            check_parity(variant, "logits", y, expected_logits)
         end
     end
 
@@ -211,12 +196,7 @@ function run_variant_parity(variant::Symbol, fixture)
             st = Lux.testmode(st)
             ps, st = load(ps, st)
             y, _ = model(x1, ps, st)
-            @test size(y) == size(expected1)
-            diff = maximum(abs.(y .- expected1))
-            ref_scale = max(maximum(abs.(expected1)), eps(Float32))
-            rel = diff / ref_scale
-            @info "$(variant) features (in_chans=1) max-abs-diff = $diff, rel = $rel"
-            @test rel < feature_rtol(variant)
+            check_parity(variant, "features_in1c", y, expected1)
         end
     end
 end

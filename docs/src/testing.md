@@ -6,18 +6,16 @@ CurrentModule = Luximm
 
 Luximm's correctness story rests on parity tests: for every registered
 variant, the Julia forward must match `timm`'s forward on the same
-input and weights. The bar is two-tier:
+input and weights. Every comparison (features, logits, the
+`in_chans=1` companion and each `features_only` tap) uses one metric,
+the relative L2 error `‖y - ref‖ / ‖ref‖`, against one bar,
+`PARITY_RTOL = 1f-3` in `test/_parity_tol.jl`. The suite runs on CPU
+in FP32. Correct ports land at `1e-7` to `1e-5`, and porting bugs at
+`1e-2` and above; [Porting](porting.md) explains the choice.
 
-- **Logits** are checked at an absolute max-abs-diff under
-  `TOL = 1f-3`. The classifier head is shallow and tightly bounded,
-  so an absolute ceiling is the meaningful end-to-end guarantee.
-- **Features** (`forward_features` and the `in_chans=1` companion)
-  are checked at a relative bar, `max-abs-diff / max-abs(timm ref)`
-  under `FEATURES_RTOL = 1f-3`. Deep backbones accumulate FP32
-  rounding through dozens of stages, which inflates raw pre-norm
-  feature diffs by a factor that scales with depth and channel
-  width, even when downstream logits stay tight. A relative bar
-  keeps the check scale-free across tiny through huge variants.
+Set `JIMM_PARITY_REPORT` to a file path to also append one CSV row
+per check (`variant,check,rel_l2,cosine,max_abs,pass`), which makes a
+full sweep easy to review.
 
 This page covers the layout of the test suite, how to scope a run
 to a single variant, how to dump the HDF5 fixture a parity test
