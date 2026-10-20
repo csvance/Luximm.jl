@@ -1,7 +1,7 @@
 """Shared helpers for Luximm.jl parity dump sidecars.
 
-Vendored from MMILux.jl/test/parity/_dump_common.py and kept byte-identical
-so that the `timm-to-lux` skill's Python snippets apply unchanged.
+The `timm-to-lux` skill (skills/timm-to-lux/SKILL.md) documents how a port
+uses these helpers.
 
 Each dump script writes a single HDF5 file containing:
 

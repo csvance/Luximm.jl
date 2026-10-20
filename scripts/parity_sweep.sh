@@ -21,7 +21,8 @@
 #   HF_TOKEN            optional; read from $HF_HOME/token when unset
 #   JIMM_TEST_FAMILIES, JIMM_TEST_VARIANTS
 #                       scope the run, for the dumps as well as the tests
-#                       (see test/_filter.jl)
+#                       (see test/_filter.jl). Neither set: every family,
+#                       parity and unit alike.
 #
 # Each run writes runs/<timestamp>-<sha>/ (under LUXIMM_DATA, or the repo's
 # data/ when it is unset) with sweep.log and parity_report.csv. Exits non-zero
@@ -59,6 +60,11 @@ fi
 # CoAtNet's in12k repos use Xet storage, which stalls on some networks.
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
+# A plain Pkg.test() runs only the unit families; a sweep runs everything.
+if [[ -z "${JIMM_TEST_FAMILIES:-}" && -z "${JIMM_TEST_VARIANTS:-}" ]]; then
+    export JIMM_TEST_FAMILIES=all
+fi
+
 sha=$(git rev-parse --short HEAD)
 run_dir="$runs_root/$(date +%Y%m%d-%H%M%S)-$sha"
 mkdir -p "$run_dir"
@@ -83,10 +89,11 @@ echo "[sweep] uv sync"
 uv sync || { echo "[sweep] uv sync failed" >&2; exit 1; }
 
 # The family list and the scoping both come from test/_filter.jl, so the dumps
-# cover exactly what the tests will run. The file has no dependencies.
+# cover exactly the parity families the tests will run. The file has no
+# dependencies.
 mapfile -t families < <(julia --startup-file=no -e '
     include("test/_filter.jl")
-    foreach(println, (f for f in _JIMM_DEFAULT_FAMILIES if f != "infra" && family_enabled(f)))')
+    foreach(println, (f for f in PARITY_FAMILIES if family_enabled(f)))')
 mapfile -t pyramid_families < <(uv run python -c '
 import sys; sys.path.insert(0, "test/parity")
 from dump_features_only_io import PYRAMID_FAMILIES; print("\n".join(PYRAMID_FAMILIES))')

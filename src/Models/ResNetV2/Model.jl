@@ -237,10 +237,10 @@ end
 """
     gn_act(C; groups=32, eps=1f-5) -> @compact block
 
-GroupNorm(groups, C; affine=true) followed by ReLU.
+`Layers.LuximmGroupNorm(C, groups; epsilon = eps)` followed by ReLU.
 """
 function gn_act(C::Int; groups::Int = 32, eps::Float32 = 1.0f-5)
-    return @compact(gn = GroupNorm(C, groups; affine = true, epsilon = eps)) do x
+    return @compact(gn = Layers.LuximmGroupNorm(C, groups; epsilon = eps)) do x
         @return NNlib.relu.(gn(x))
     end
 end

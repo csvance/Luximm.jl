@@ -1,0 +1,56 @@
+name: Tests
+
+# The unit families (infra, interface, reactant): what a plain `Pkg.test()` runs. No parity
+# fixtures or pretrained weights; the parity families run by hand via scripts/parity_sweep.sh.
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - 'docs/**'
+      - 'skills/**'
+      - 'scripts/**'
+      - 'test/parity/**'
+      - '.claude-plugin/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/format.yml'
+      - '.github/workflows/TagBot.yml'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - 'skills/**'
+      - 'scripts/**'
+      - 'test/parity/**'
+      - '.claude-plugin/**'
+      - 'README.md'
+      - 'CLAUDE.md'
+      - 'LICENSE'
+      - 'NOTICE'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/format.yml'
+      - '.github/workflows/TagBot.yml'
+
+permissions:
+  contents: read
+
+# A newer PR run cancels the old one. Master runs finish.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1

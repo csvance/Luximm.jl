@@ -7,10 +7,10 @@ using Luximm
 
 include("_filter.jl")
 
-let unknown = setdiff(families_enabled(), _JIMM_DEFAULT_FAMILIES)
+let unknown = setdiff(families_enabled(), _JIMM_ALL_FAMILIES)
     isempty(unknown) || error(
         "unknown family in JIMM_TEST_FAMILIES: $(join(sort(collect(unknown)), ", ")); " *
-            "known: $(join(_JIMM_DEFAULT_FAMILIES, ", "))",
+            "known: $(join(_JIMM_ALL_FAMILIES, ", "))",
     )
 end
 

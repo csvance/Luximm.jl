@@ -23,6 +23,23 @@ vit_layernorm
 rel_pos_attention
 ```
 
+## Normalization
+
+Luximm's own normalization layers and statistics, with the parameter
+trees of Lux's `LayerNorm` and `GroupNorm`. On ordinary arrays
+`layernorm` and `groupnorm` call LuxLib and `mean_var` uses
+`Statistics`; under Reactant, the `LuximmReactantExt` extension gives
+them traced methods whose backward skips the identically zero
+∂σ²/∂μ reduction while staying exact at every derivative order.
+
+```@docs
+Layers.LuximmLayerNorm
+Layers.LuximmGroupNorm
+Layers.layernorm
+Layers.groupnorm
+Layers.mean_var
+```
+
 ## Helpers
 
 ```@docs

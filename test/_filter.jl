@@ -1,36 +1,36 @@
 # Test-subset gating shared by every test file.
 #
-# Two environment variables control what runs:
+# Families come in two kinds:
 #
-#   JIMM_TEST_FAMILIES  comma-separated family names, the keys of
-#                       `FAMILY_FILES` below. Empty / unset means
-#                       all families run, unless JIMM_TEST_VARIANTS is set
-#                       (in which case the family set is inferred from the
-#                       requested variants and infra is dropped).
+#   unit    `infra`, `interface`, `reactant`: small, self-contained checks with
+#           no parity fixtures and no pretrained weights. A plain `Pkg.test()`
+#           runs these, and so does CI.
+#   parity  one family per backbone, comparing every variant against a timm
+#           fixture. Heavy (weights for every variant), so they only run when
+#           asked for: by scripts/parity_sweep.sh, scripts/test_variant.sh, or
+#           the variables below.
+#
+# Two environment variables select what runs:
+#
+#   JIMM_TEST_FAMILIES  comma-separated family names (the keys of `FAMILY_FILES`),
+#                       or `parity` for every parity family, or `all`.
 #   JIMM_TEST_VARIANTS  comma-separated variant keys (Symbol names) to keep
-#                       inside each family's parity sweep. Empty / unset means
-#                       all variants for the enabled families run.
+#                       inside each parity family. When JIMM_TEST_FAMILIES is
+#                       unset, the families are inferred from these variants.
 #
-# Intent: compute-constrained workflows can run a single backbone, or a single
-# variant of a single backbone, without paying for the rest. The common case
-# only needs one env var:
+# Neither set: the unit families. Examples:
 #
-#   JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
-#       julia --project -e 'using Pkg; Pkg.test()'
-#
-# That runs *only* the ConvNeXtV2 parity testset for `convnextv2_atto_fcmae`;
-# the infra and BiT families are skipped automatically. To run the infra
-# checks too, list them explicitly:
-#
-#   JIMM_TEST_FAMILIES=infra,convnextv2 \
-#   JIMM_TEST_VARIANTS=convnextv2_atto_fcmae \
-#       julia --project -e 'using Pkg; Pkg.test()'
+#   julia --project -e 'using Pkg; Pkg.test()'                        # unit
+#   JIMM_TEST_VARIANTS=convnextv2_atto_fcmae julia --project -e '...'  # one variant
+#   JIMM_TEST_FAMILIES=infra,convnextv2 julia --project -e '...'       # mixed
 
 # Every test family and the files it runs, in run order. `runtests.jl` walks this
-# table; adding a family means adding its row here and a prefix in
-# `_jimm_variant_family` below.
+# table; adding a parity family means adding its row here, to `PARITY_FAMILIES`,
+# and a prefix in `_jimm_variant_family` below.
 const FAMILY_FILES = (
     "infra" => ("test_hf_download.jl", "test_hf_hub_download.jl", "test_init.jl"),
+    "interface" => ("test_interface.jl",),
+    "reactant" => ("test_reactant.jl",),
     "bit" => ("test_bit_resnet.jl",),
     "resnet" => ("test_resnet.jl",),
     "convnext" => ("test_convnext.jl",),
@@ -41,7 +41,9 @@ const FAMILY_FILES = (
     "coatnet" => ("test_coatnet.jl",),
 )
 
-const _JIMM_DEFAULT_FAMILIES = first.(FAMILY_FILES)
+const _JIMM_ALL_FAMILIES = first.(FAMILY_FILES)
+const PARITY_FAMILIES = ("bit", "resnet", "convnext", "convnextv2", "vgg", "seresnet", "vit", "coatnet")
+const _JIMM_DEFAULT_FAMILIES = Tuple(f for f in _JIMM_ALL_FAMILIES if !(f in PARITY_FAMILIES))
 
 function _jimm_env_csv(name::AbstractString)
     raw = get(ENV, name, "")
@@ -74,30 +76,28 @@ end
 
 The set of test families that should run this invocation. Resolution order:
 
-1. `JIMM_TEST_FAMILIES` set: use exactly that set.
-2. `JIMM_TEST_FAMILIES` unset, `JIMM_TEST_VARIANTS` set: infer the family
-   set from the requested variants. Infra is dropped — when the user asks
-   for a specific backbone variant, they almost always want only that
-   variant's parity test, not the infra checks too.
-3. Both unset: every family in `_JIMM_DEFAULT_FAMILIES`.
+1. `JIMM_TEST_FAMILIES` set: exactly that set, with `parity` expanding to
+   every parity family and `all` to every family.
+2. `JIMM_TEST_FAMILIES` unset, `JIMM_TEST_VARIANTS` set: the parity families
+   of the requested variants (all parity families if any variant is
+   unrecognized, rather than silently dropping it).
+3. Both unset: the unit families, `_JIMM_DEFAULT_FAMILIES`.
 """
 function families_enabled()
     explicit = _jimm_env_csv("JIMM_TEST_FAMILIES")
-    isempty(explicit) || return Set(explicit)
+    if !isempty(explicit)
+        fams = Set{String}()
+        for f in explicit
+            f == "all" ? union!(fams, _JIMM_ALL_FAMILIES) :
+                f == "parity" ? union!(fams, PARITY_FAMILIES) : push!(fams, f)
+        end
+        return fams
+    end
 
     variants = _jimm_env_csv("JIMM_TEST_VARIANTS")
     if !isempty(variants)
-        fams = String[]
-        for raw in variants
-            f = _jimm_variant_family(Symbol(raw))
-            isempty(f) || push!(fams, f)
-        end
-        # If every listed variant resolved to a known family, return just
-        # those. If any are unknown, fall back to all families (safer than
-        # silently dropping the unrecognized name).
-        if length(fams) == length(variants)
-            return Set(fams)
-        end
+        fams = [_jimm_variant_family(Symbol(raw)) for raw in variants]
+        return any(isempty, fams) ? Set(PARITY_FAMILIES) : Set(fams)
     end
 
     return Set(_JIMM_DEFAULT_FAMILIES)

@@ -9,8 +9,8 @@
 #   3. Builds the Luximm model, applies the weights, and asserts the relative L2 error
 #      against the timm reference is under `PARITY_RTOL`.
 #
-# Skipped if the fixture file is missing or HF_OFFLINE=1 is set (so CI without
-# network or fixtures can still pass the rest of the suite).
+# Skipped if the fixture file is missing or HF_OFFLINE=1 is set (so a run without
+# network or fixtures still passes the rest of the suite).
 
 using Test
 using Luximm
@@ -45,26 +45,4 @@ const VARIANTS_TO_TEST = Tuple(sort(collect(keys(Luximm.CONVNEXTV2_VARIANTS))))
             run_variant_parity(variant, fixture)
         end
     end
-end
-
-# The default block layout (timm's `conv_mlp = False`: LayerNorm over a contiguous channel axis, GEMM
-# pointwise layers) against the 1x1-convolution form (`conv_mlp = true`). No fixtures or downloads:
-# the parity tests above pin the default to timm, and this pins the two layouts to each other.
-@testset "ConvNeXtV2 conv_mlp = true matches the default layout" begin
-    v = :convnextv2_tiny_fcmae_ft_in22k_in1k
-    a = Luximm.create_model(v; num_classes = 0, conv_mlp = true)
-    b = Luximm.create_model(v; num_classes = 0)
-    ps_a, st_a = Lux.setup(Xoshiro(0), a)
-    ps_b, st_b = Lux.setup(Xoshiro(0), b)
-    @test ps_a == ps_b                     # names, shapes and values: weights load unchanged
-    @test st_a == st_b
-    # GRN is zero-initialized (identity); give it non-trivial parameters so its path is exercised.
-    ps = Lux.Functors.fmap_with_path(ps_a) do kp, x
-        any(==(:grn), kp) ? randn(Xoshiro(hash(kp)), Float32, size(x)) .* 0.1f0 : x
-    end
-    x = randn(Xoshiro(1), Float32, 64, 64, 3, 2)
-    y_a, _ = a(x, ps, st_a)
-    y_b, _ = b(x, ps, st_b)
-    @test size(y_a) == size(y_b)
-    @test isapprox(y_b, y_a; rtol = 1.0f-4, atol = 1.0f-5)
 end

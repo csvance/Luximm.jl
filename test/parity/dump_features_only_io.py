@@ -46,7 +46,7 @@ from _dump_common import PARITY_BATCH, dump, to_numpy
 
 # Short key (the Luximm variant symbol) -> (full timm name, Luximm test
 # family). Covers every registered variant of the six families that build a
-# feature pyramid, so a full CI sweep produces a fixture for each one and no
+# feature pyramid, so the parity sweep (`scripts/parity_sweep.sh`) produces a fixture for each one and no
 # variant silently skips its pyramid testset. VGG / CoAtNet are absent
 # on purpose: they have no pyramid.
 FEATURES_ONLY_VARIANTS: Mapping[str, Tuple[str, str]] = {
@@ -219,8 +219,8 @@ def run_one(
 PYRAMID_FAMILIES = ("resnet", "seresnet", "bit", "convnext", "convnextv2", "vit")
 
 # Families Luximm registers that have no feature pyramid. A `--variant` from
-# one of these exits 0 with a note instead of failing, so the CI builder can
-# call this sidecar for every family without special-casing.
+# one of these exits 0 with a note instead of failing, so a caller can
+# run this sidecar for every family without special-casing.
 NO_PYRAMID_PREFIXES = ("vgg", "coatnet")
 
 
