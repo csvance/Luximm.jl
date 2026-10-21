@@ -3,36 +3,25 @@ name: Tests
 # The unit families (infra, interface, reactant): what a plain `Pkg.test()` runs. No parity
 # fixtures or pretrained weights; the parity families run by hand via scripts/parity_sweep.sh.
 
+# Run only when something the unit tests depend on changes: the package (src/, ext/,
+# Project.toml), the Julia test files, or this workflow. Docs, skills, scripts and the Python
+# parity sidecars under test/parity/ do not trigger it.
 on:
   push:
     branches: [master]
-    paths-ignore:
-      - 'docs/**'
-      - 'skills/**'
-      - 'scripts/**'
-      - 'test/parity/**'
-      - '.claude-plugin/**'
-      - 'README.md'
-      - 'CLAUDE.md'
-      - 'LICENSE'
-      - 'NOTICE'
-      - '.github/workflows/docs.yml'
-      - '.github/workflows/format.yml'
-      - '.github/workflows/TagBot.yml'
+    paths:
+      - 'src/**'
+      - 'ext/**'
+      - 'test/**/*.jl'
+      - 'Project.toml'
+      - '.github/workflows/tests.yml'
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - 'skills/**'
-      - 'scripts/**'
-      - 'test/parity/**'
-      - '.claude-plugin/**'
-      - 'README.md'
-      - 'CLAUDE.md'
-      - 'LICENSE'
-      - 'NOTICE'
-      - '.github/workflows/docs.yml'
-      - '.github/workflows/format.yml'
-      - '.github/workflows/TagBot.yml'
+    paths:
+      - 'src/**'
+      - 'ext/**'
+      - 'test/**/*.jl'
+      - 'Project.toml'
+      - '.github/workflows/tests.yml'
 
 permissions:
   contents: read

@@ -135,9 +135,11 @@ else
 fi
 
 echo "[sweep] running Julia tests"
+# Pkg.resolve first: Manifest.toml is git-ignored, so after a branch adds or changes a
+# dependency the local manifest is stale and instantiate warns on every run.
 # --check-bounds=auto: Pkg.test's default --check-bounds=yes keeps a second package-image
 # cache, so every dependency would precompile again for the test process.
-julia --project=. -e 'using Pkg; Pkg.instantiate(); Pkg.test(; julia_args = ["--check-bounds=auto"])'
+julia --project=. -e 'using Pkg; Pkg.resolve(); Pkg.instantiate(); Pkg.test(; julia_args = ["--check-bounds=auto"])'
 test_rc=$?
 
 echo
