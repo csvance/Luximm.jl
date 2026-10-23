@@ -1,0 +1,24 @@
+# Dependabot keeps the [compat] bounds and the workflow actions current. Each update opens
+# a PR, so the Tests, Format and Documentation workflows gate it like any other change.
+version: 2
+updates:
+  # Widens a [compat] entry when a dependency releases a version outside it. The package
+  # and the docs env each carry their own [compat]; utils/ has none, so there is nothing
+  # for Dependabot to bump there.
+  - package-ecosystem: "julia"
+    directories:
+      - "/"
+      - "/docs"
+    schedule:
+      interval: "weekly"
+
+  # Bumps the actions every workflow uses, including TagBot's SHA pin and its version
+  # comment. One grouped PR, since the actions move together across the workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
