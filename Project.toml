@@ -21,7 +21,7 @@ Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
 LuximmReactantExt = "Reactant"
 
 [compat]
-Downloads = "^1.7.0"
+Downloads = "1.6, ^1.7.0"
 Enzyme = "0.13"
 EnzymeCore = "0.8"
 ForwardDiff = "1"
