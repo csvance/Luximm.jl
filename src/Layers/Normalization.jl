@@ -57,8 +57,9 @@ LuximmLayerNorm(shape, dims; epsilon = 1.0f-5) = LuximmLayerNorm(Tuple(shape), d
 Lux.initialparameters(rng::AbstractRNG, l::LuximmLayerNorm) =
     (; bias = zeros32(rng, l.shape..., 1), scale = ones32(rng, l.shape..., 1))
 
-(l::LuximmLayerNorm)(x, ps, st::NamedTuple) =
-    (layernorm(x, ps.scale, ps.bias, l.dims, l.epsilon), st)
+@trace function (l::LuximmLayerNorm)(x, ps, st::NamedTuple)
+    return layernorm(x, ps.scale, ps.bias, l.dims, l.epsilon), st
+end
 
 """
     LuximmGroupNorm(chs, groups; epsilon = 1f-5)
@@ -82,5 +83,6 @@ end
 Lux.initialparameters(rng::AbstractRNG, l::LuximmGroupNorm) =
     (; scale = ones32(rng, l.chs), bias = zeros32(rng, l.chs))
 
-(l::LuximmGroupNorm)(x, ps, st::NamedTuple) =
-    (groupnorm(x, ps.scale, ps.bias, l.groups, l.epsilon), st)
+@trace function (l::LuximmGroupNorm)(x, ps, st::NamedTuple)
+    return groupnorm(x, ps.scale, ps.bias, l.groups, l.epsilon), st
+end

@@ -1,14 +1,28 @@
 module LuximmReactantExt
 
-# Traced-array methods for Luximm's normalization statistics (src/Layers/Normalization.jl).
-# Only Luximm's own functions get methods here; nothing in LuxLib is overridden, so this
-# composes with any LuxLib, forked or not.
+# Traced-array methods for Luximm's normalization statistics (src/Layers/Normalization.jl), and
+# the `@trace` call-cache key of its normalization layers. Only Luximm's own functions and types
+# get methods here; nothing in LuxLib is overridden, so this composes with any LuxLib, forked or
+# not.
 
 using EnzymeCore: EnzymeCore
 using Reactant: Reactant, AnyTracedRArray
 using Statistics: mean, var
 
 using Luximm.Layers: Layers
+
+# LuxCore's Reactant extension returns every AbstractLuxLayer unchanged from `make_tracer`, which
+# leaves the layer out of the key of Reactant's `@trace` call cache: two layers of one type with
+# different settings would share one traced call. Put our layers into the key; identical layers
+# still share a call.
+function Reactant.make_tracer(
+        seen, @nospecialize(l::Union{Layers.LuximmGroupNorm, Layers.LuximmLayerNorm}),
+        @nospecialize(path), mode; kwargs...
+    )
+    mode == Reactant.TracedToTypes || return l
+    push!(path, l)
+    return nothing
+end
 
 # Reverse-mode AD of `var(x; mean = μ)` differentiates through `μ` as well as `x`, and the term it
 # gets through `μ` is ∂σ²/∂μ = -2/(M - c) Σ(x - μ), which is identically zero because `μ` is the mean

@@ -34,8 +34,10 @@ family:
   - `reactant`: the Reactant extension. Its normalization statistics,
     their gradients and their Hessian-vector products match plain
     `Statistics` definitions differentiated with ForwardDiff (Float64,
-    to `1e-10`), and a compiled ConvNeXt V2 and BiT forward matches
-    the host forward.
+    to `1e-10`), as do gradients through the traced LayerNorm and
+    GroupNorm layers; two layers of one type with different settings
+    in one compiled function each get their own traced call; and a
+    compiled ConvNeXt V2 and BiT forward matches the host forward.
 - **Parity families**, one per backbone (`bit`, `resnet`, `convnext`,
   `convnextv2`, `vgg`, `seresnet`, `vit`, `coatnet`), run only when
   asked for: by the full sweep, by `scripts/test_variant.sh`, or by
