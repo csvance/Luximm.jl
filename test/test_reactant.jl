@@ -134,3 +134,106 @@ end
     @test size(y_ra) == size(y_host)
     @test norm(Array(y_ra) .- y_host) / norm(y_host) < 1.0f-4
 end
+
+# The layer forwards are `@trace function`s, so Reactant traces each one once per compile and reuses
+# it through a cached `func.call`. The cache key comes from `make_tracer`, which LuxCore's Reactant
+# extension makes skip every AbstractLuxLayer; without the extension's method for Luximm's layers,
+# two layers of one type with different settings on same-shaped inputs would share one traced call,
+# and the second would silently return the first one's result. The input's channels have different
+# means and scales, because on a normalized input 1 and 32 groups agree and the check is vacuous.
+const x_mixed = randn(Xoshiro(4), Float32, 8, 8, 64, 2) .* reshape(1:64, 1, 1, :, 1) .+
+    reshape(1:64, 1, 1, :, 1)
+
+# Both layers applied, in order, to the same input and parameters inside one compiled function.
+function jit_pair(l1, l2, x, ps, st)
+    f(x, ps) = (first(l1(x, ps, st)), first(l2(x, ps, st)))
+    return Array.(@jit f(Reactant.to_rarray(x), Reactant.to_rarray(ps)))
+end
+
+@testset "$(name): two settings in one compile" for (name, l1, l2) in (
+        ("LuximmGroupNorm groups", NormLayers.LuximmGroupNorm(64, 32), NormLayers.LuximmGroupNorm(64, 1)),
+        (
+            "LuximmGroupNorm epsilon",
+            NormLayers.LuximmGroupNorm(64, 32; epsilon = 1.0f-5),
+            NormLayers.LuximmGroupNorm(64, 32; epsilon = 10.0f0),
+        ),
+        (
+            "LuximmLayerNorm epsilon",
+            NormLayers.LuximmLayerNorm((8, 1, 1), 1; epsilon = 1.0f-5),
+            NormLayers.LuximmLayerNorm((8, 1, 1), 1; epsilon = 10.0f0),
+        ),
+        ("LuximmLayerNorm dims", NormLayers.LuximmLayerNorm((8, 1, 1), 1), NormLayers.LuximmLayerNorm((8, 1, 1), (1, 2))),
+    )
+
+    ps, st = Lux.setup(Xoshiro(0), l1)
+    y1, y2 = jit_pair(l1, l2, x_mixed, ps, st)
+    @test y1 ≈ first(l1(x_mixed, ps, st)) atol = 1.0f-4 rtol = 1.0f-4
+    @test y2 ≈ first(l2(x_mixed, ps, st)) atol = 1.0f-4 rtol = 1.0f-4
+    @test maximum(abs, y1 .- y2) > 1.0f-2   # the input tells the two settings apart
+end
+
+# The same check on Lux's own GroupNorm, which LuxCore leaves out of the key: the negative control
+# for the testset above, showing that it detects the bug. When Lux ships a fix this reports an
+# Unexpected Pass; then raise the LuxCore lower bound and consider dropping the extension's
+# `make_tracer` method for Luximm's layers.
+@testset "Lux.GroupNorm: two settings in one compile (upstream bug)" begin
+    l1, l2 = Lux.GroupNorm(64, 32), Lux.GroupNorm(64, 1)
+    ps, st = Lux.setup(Xoshiro(0), l1)
+    _, y2 = jit_pair(l1, l2, x_mixed, ps, st)
+    @test_broken isapprox(y2, first(l2(x_mixed, ps, st)); atol = 1.0f-4, rtol = 1.0f-4)
+end
+
+# The key separates settings without defeating the cache: identical layers share one traced
+# function, different ones get one each. Counted in the unoptimized module, where the calls are
+# not yet inlined.
+@testset "traced calls are shared between identical layers" begin
+    function n_traced(l1, l2)
+        ps, st = Lux.setup(Xoshiro(0), l1)
+        f(x, ps) = (first(l1(x, ps, st)), first(l2(x, ps, st)))
+        hlo = string(
+            @code_hlo optimize = false f(Reactant.to_rarray(x_mixed), Reactant.to_rarray(ps))
+        )
+        return count(l -> occursin("func.func", l) && occursin("LuximmGroupNorm", l), split(hlo, '\n'))
+    end
+    @test n_traced(NormLayers.LuximmGroupNorm(64, 32), NormLayers.LuximmGroupNorm(64, 32)) == 1
+    @test n_traced(NormLayers.LuximmGroupNorm(64, 32), NormLayers.LuximmGroupNorm(64, 1)) == 2
+end
+
+# Gradients and a forward-over-reverse Hessian-vector product through the traced layer call, which
+# now holds the extension's statistics and their `ignore_derivatives`. Each case: the layer, the
+# reference forward of `(x, scale, bias)`, the input, the parameters and the loss weight.
+const LAYER_CASES = (
+    LuximmLayerNorm = (
+        NormLayers.LuximmLayerNorm((6,), 1; epsilon = 1.0e-5),
+        (x, γ, β) -> ref_layernorm(x, γ, β, 1, 1.0e-5),
+        x_ln, (; bias = β_ln, scale = γ_ln), w_ln,
+    ),
+    LuximmGroupNorm = (
+        NormLayers.LuximmGroupNorm(8, 4; epsilon = 1.0e-5),
+        (x, γ, β) -> ref_groupnorm(x, γ, β, 4, 1.0e-5),
+        x_gn, (; scale = γ_gn, bias = β_gn), w_gn,
+    ),
+)
+
+@testset "$(name) layer gradient and Hessian-vector product" for (name, (layer, ref, x, ps, w)) in
+    pairs(LAYER_CASES)
+
+    loss = (x, ps, w) -> sum(first(layer(x, ps, (;))) .* w)
+    ref_loss = (x, γ, β) -> sum(ref(x, γ, β) .* w)
+    x_ra, ps_ra, w_ra = Reactant.to_rarray.((x, ps, w))
+
+    ∂x, ∂ps = @jit Enzyme.gradient(Reverse, Const(loss), x_ra, ps_ra, Const(w_ra))
+    @test Array(∂x) ≈ ForwardDiff.gradient(z -> ref_loss(z, ps.scale, ps.bias), x) atol = 1.0e-10 rtol =
+        1.0e-10
+    @test Array(∂ps.scale) ≈ ForwardDiff.gradient(γ -> ref_loss(x, γ, ps.bias), ps.scale) atol =
+        1.0e-10 rtol = 1.0e-10
+    @test Array(∂ps.bias) ≈ ForwardDiff.gradient(β -> ref_loss(x, ps.scale, β), ps.bias) atol =
+        1.0e-10 rtol = 1.0e-10
+
+    v = randn(Xoshiro(2), size(x)...)
+    hvp_ref = ForwardDiff.derivative(
+        t -> ForwardDiff.gradient(z -> ref_loss(z, ps.scale, ps.bias), x .+ t .* v), 0.0
+    )
+    @test Array(@jit hvp_forward_over_reverse(loss, x_ra, Reactant.to_rarray(v), ps_ra, w_ra)) ≈
+        hvp_ref atol = 1.0e-10 rtol = 1.0e-10
+end

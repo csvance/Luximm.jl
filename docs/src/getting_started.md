@@ -367,9 +367,12 @@ every normalization skips a full-size reduction whose value is
 identically zero (the derivative of the variance with respect to the
 mean), while first and higher derivatives stay exact, so gradient
 penalties and other nested AD remain correct. Nothing needs to be
-configured; `using Reactant` is enough. Parameter trees are the same
-as Lux's `LayerNorm` and `GroupNorm`, so weights and checkpoints carry
-over.
+configured; `using Reactant` is enough. As with Lux's own layers, the
+LayerNorm and GroupNorm forwards are `@trace` functions, so each distinct
+layer configuration is traced once per compile and reused through a
+function call, which shrinks the compiled module. Parameter trees are the
+same as Lux's `LayerNorm` and `GroupNorm`, so weights and checkpoints
+carry over.
 
 ## Pretrained weights and the HuggingFace cache
 

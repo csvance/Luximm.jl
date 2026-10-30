@@ -2,6 +2,7 @@ module Layers
 
 using Lux
 using NNlib
+using ReactantCore: @trace
 using Statistics
 
 include("Init.jl")
